@@ -1,3 +1,3 @@
 # CHASM: Coronal Hole Annotation using Semi-automatic Methods
 
-Authors: Cutter Beck, Evan Smith
+Authors: C. Beck, E. Smith, K. Katuwal, R. Kafle, and J. Whitehill
