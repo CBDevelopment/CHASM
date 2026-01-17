@@ -1,12 +1,41 @@
+[build-system]
+requires = ["uv_build >= 0.9.21, <0.10.0"]
+build-backend = "uv_build"
+
 [project]
-name = "chasm"
+name = "CHASM"
 version = "0.1.0"
-description = "CHASM"
-readme = "README.md"
-requires-python = ">=3.13"
 dependencies = [
     "ipykernel>=6.30.1",
     "matplotlib>=3.10.5",
     "python-dotenv>=1.1.1",
     "sunpy[map]>=7.0.1",
 ]
+requires-python = ">=3.13"
+authors = [
+    {name = "Cutter J. Beck", email = "cjbeck@alum.wpi.edu"},
+    {name = "Evan G. Smith", email = "egsmith@wpi.edu"},
+    {name = "Khagendra Katuwal", email = "katuwal@nmsu.edu"},
+    {name = "Rudra Kafle", email = "rpk101@wpi.edu"},
+    {name = "Jacob Whitehill", email = "jrwhitehill@wpi.edu"},
+]
+maintainers = [
+    {name = "Cutter J. Beck", email = "cjbeck@alum.wpi.edu"},
+    {name = "Evan G. Smith", email = "egsmith@wpi.edu"},
+]
+
+description = "Coronal Hole Annotation using Semi-automatic Methods (CHASM)"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["COPYING"]
+keywords = ["solar physics", "coronal holes", "machine learning", "data annotation", "sunpy"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python"
+]
+
+[project.urls]
+Repository = "https://github.com/CBDevelopment/CHASM"
+
+[project.gui-scripts]
+chasm = "app.run_app"
