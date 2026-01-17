@@ -9,7 +9,8 @@ from PIL import Image, ImageTk  # Requires the Pillow library for handling image
 from time import perf_counter
 import csv
 from datasets.folder_utils import get_file_by_date
-from CHASM.app.threaded_image_loader import *
+from chasm.app.threaded_image_loader import *
+
 
 # TODO have app save in JUST .npz format, having the .csv is kind of confusing
 class CoronalHoleClassifier:
@@ -28,15 +29,17 @@ class CoronalHoleClassifier:
         self.max_height = max_height
 
         # Add the threaded loader
-        self.image_loader = ThreadedImageLoader(self.load_dir, self.masks_dir, self.save_dir, queue_size=1)
+        self.image_loader = ThreadedImageLoader(
+            self.load_dir, self.masks_dir, self.save_dir, queue_size=1
+        )
 
         # Stuff (modified) from manual process for masks
-        self.masks = None # No mask with no image yet
+        self.masks = None  # No mask with no image yet
         self.selected_mask = None
 
-        # Used for scaling and storing image 
+        # Used for scaling and storing image
         # All of thes are loaded with load_image()
-        self.image = None 
+        self.image = None
         self.scale_factor = None
         self.scaled_image = None
         self.tk_image = None
@@ -63,7 +66,7 @@ class CoronalHoleClassifier:
                 return True
             else:
                 return False
-            
+
         validate_input = self.root.register(on_validate_input)
 
         # Left panel (map display)
@@ -72,7 +75,8 @@ class CoronalHoleClassifier:
 
         # Width and height will change dynamically later as image loaded
         self.image_canvas = Canvas(
-            self.left_frame, width=self.min_width, height=self.max_height, bg="white")
+            self.left_frame, width=self.min_width, height=self.max_height, bg="white"
+        )
         self.image_canvas.pack()
 
         # Right panel
@@ -80,27 +84,44 @@ class CoronalHoleClassifier:
         self.right_frame.pack(side=tk.LEFT, padx=20, pady=10)
 
         # Title
-        Label(self.right_frame, text="Coronal Hole Masks", font=(
-            "Helvetica", 20, "bold")).pack(anchor="w", pady=5)
+        Label(
+            self.right_frame, text="Coronal Hole Masks", font=("Helvetica", 20, "bold")
+        ).pack(anchor="w", pady=5)
 
         # Next Drawing / Previous Drawing buttons at top (with its own frame)
-        self.drawing_buttons_frame = tk.Frame(self.right_frame) # Used to get the buttons side by side at the top
+        self.drawing_buttons_frame = tk.Frame(
+            self.right_frame
+        )  # Used to get the buttons side by side at the top
         self.drawing_buttons_frame.pack(side="top")  # fill="x" to pack horizontally
 
-        self.labelFont = tkFont.Font(family='Helvetica', size=16)
+        self.labelFont = tkFont.Font(family="Helvetica", size=16)
 
         previous_drawing_button = Button(
-            self.drawing_buttons_frame, font=self.labelFont, text="Previous Drawing", command=self.previous_drawing, width=20)
+            self.drawing_buttons_frame,
+            font=self.labelFont,
+            text="Previous Drawing",
+            command=self.previous_drawing,
+            width=20,
+        )
         previous_drawing_button.pack(side="left", padx=10, pady=20, fill="x")
 
         next_drawing_button = Button(
-            self.drawing_buttons_frame, font=self.labelFont, text="Next Drawing", command=self.next_drawing, width=20)
+            self.drawing_buttons_frame,
+            font=self.labelFont,
+            text="Next Drawing",
+            command=self.next_drawing,
+            width=20,
+        )
         next_drawing_button.pack(side="left", padx=10, pady=20, fill="x")
 
         # Checkbox for no coronal holes
         self.no_coronal_holes = tk.BooleanVar()
         self.no_coronal_holes_checkbox = tk.Checkbutton(
-            self.drawing_buttons_frame, text="No Coronal Holes", variable=self.no_coronal_holes, font=self.labelFont)
+            self.drawing_buttons_frame,
+            text="No Coronal Holes",
+            variable=self.no_coronal_holes,
+            font=self.labelFont,
+        )
         self.no_coronal_holes_checkbox.pack(side="left", padx=10, pady=20, fill="x")
 
         # Row for CH Mask, Confidence, and Polarity (back to right frame)
@@ -108,40 +129,63 @@ class CoronalHoleClassifier:
         self.ch_buttons.pack(pady=10, anchor="w")
 
         # Entry for number of CHs detected by SAM
-        Label(self.ch_buttons, font=self.labelFont, text="Saved CHs:").grid(row=0, column=3, padx=5)
-        self.detected_chs_entry = ttk.Entry(self.ch_buttons, width=5, validate="key", state="readonly")
+        Label(self.ch_buttons, font=self.labelFont, text="Saved CHs:").grid(
+            row=0, column=3, padx=5
+        )
+        self.detected_chs_entry = ttk.Entry(
+            self.ch_buttons, width=5, validate="key", state="readonly"
+        )
         self.detected_chs_entry.grid(row=0, column=4, padx=5)
         self.update_detected_chs_count()
 
         # Entry for true number of CHs in the image
-        Label(self.ch_buttons, font=self.labelFont, text="True CHs:").grid(row=0, column=1, padx=5)
-        self.true_chs_entry = ttk.Entry(self.ch_buttons, width=5, validate="key", validatecommand=(validate_input, "%P"))
+        Label(self.ch_buttons, font=self.labelFont, text="True CHs:").grid(
+            row=0, column=1, padx=5
+        )
+        self.true_chs_entry = ttk.Entry(
+            self.ch_buttons,
+            width=5,
+            validate="key",
+            validatecommand=(validate_input, "%P"),
+        )
         self.true_chs_entry.grid(row=0, column=2, padx=5)
 
         # Mask placeholder
-        self.mask_canvas = Canvas(
-            self.ch_buttons, width=100, height=50, bg="lightgray")
+        self.mask_canvas = Canvas(self.ch_buttons, width=100, height=50, bg="lightgray")
         self.mask_canvas.grid(row=1, column=0, padx=10)
-        self.mask_canvas.create_oval(
-            25, 10, 75, 40, outline="blue", fill="blue")
+        self.mask_canvas.create_oval(25, 10, 75, 40, outline="blue", fill="blue")
 
         # Coronal hole id dropdown
-        Label(self.ch_buttons, font=self.labelFont, text="ID:").grid(row=1, column=1, padx=5)
+        Label(self.ch_buttons, font=self.labelFont, text="ID:").grid(
+            row=1, column=1, padx=5
+        )
         self.coronal_hole_id_dropdown = ttk.Entry(
-            self.ch_buttons, width=5, validate="key", validatecommand=(validate_input, "%P"))
+            self.ch_buttons,
+            width=5,
+            validate="key",
+            validatecommand=(validate_input, "%P"),
+        )
         self.coronal_hole_id_dropdown.grid(row=1, column=2, padx=5)
 
         # Confidence dropdown
-        Label(self.ch_buttons, font=self.labelFont, text="Confidence:").grid(row=1, column=3, padx=5)
+        Label(self.ch_buttons, font=self.labelFont, text="Confidence:").grid(
+            row=1, column=3, padx=5
+        )
         confidence_values = ["1", "2", "3", "4"]
-        self.confidence_dropdown = ttk.Combobox(self.ch_buttons, values=confidence_values, state="readonly", width=5)
+        self.confidence_dropdown = ttk.Combobox(
+            self.ch_buttons, values=confidence_values, state="readonly", width=5
+        )
         self.confidence_dropdown.set("3")  # Default value
         self.confidence_dropdown.grid(row=1, column=4, padx=5)
 
         # Polarity dropdown
-        Label(self.ch_buttons,  font=self.labelFont, text="Polarity:").grid(row=1, column=5, padx=5)
+        Label(self.ch_buttons, font=self.labelFont, text="Polarity:").grid(
+            row=1, column=5, padx=5
+        )
         polarity_values = ["+", "-"]
-        self.polarity_dropdown = ttk.Combobox(self.ch_buttons, values=polarity_values, state="readonly", width=5)
+        self.polarity_dropdown = ttk.Combobox(
+            self.ch_buttons, values=polarity_values, state="readonly", width=5
+        )
         self.polarity_dropdown.set("+")  # Default value
         self.polarity_dropdown.grid(row=1, column=6, padx=5)
 
@@ -150,23 +194,40 @@ class CoronalHoleClassifier:
         self.labelFontStyle.configure("BigFont.TCheckbutton", font=self.labelFont)
 
         # Create a variable to hold the state of the Checkbutton
-        self.flag_button_value = tk.IntVar(value=0)  # Set the default value to 0 (unchecked)
+        self.flag_button_value = tk.IntVar(
+            value=0
+        )  # Set the default value to 0 (unchecked)
         # NOTE: Got rid of ttk for font option
-        self.flag_button = ttk.Checkbutton(self.ch_buttons, state="readonly", text="Flag Bad", style="BigFont.TCheckbutton",
-                                           variable=self.flag_button_value, width=10)
+        self.flag_button = ttk.Checkbutton(
+            self.ch_buttons,
+            state="readonly",
+            text="Flag Bad",
+            style="BigFont.TCheckbutton",
+            variable=self.flag_button_value,
+            width=10,
+        )
         self.flag_button.grid(row=3, column=3, padx=5)
-    
+
         # Save coronal hole button below fields
-        Button(self.right_frame, font=self.labelFont, text="Save Coronal Hole", command=self.save_coronal_hole, width=20).pack(pady=20)
+        Button(
+            self.right_frame,
+            font=self.labelFont,
+            text="Save Coronal Hole",
+            command=self.save_coronal_hole,
+            width=20,
+        ).pack(pady=20)
 
         # Add a label to display selected mask info
         self.info_label = Label(
-            self.root, text="Click on a mask to select it.", wraplength=200)
+            self.root, text="Click on a mask to select it.", wraplength=200
+        )
 
-        self.ch_list = tk.Frame(self.right_frame, width=500, bg="lightblue") # Frame to store saved coronal holes
+        self.ch_list = tk.Frame(
+            self.right_frame, width=500, bg="lightblue"
+        )  # Frame to store saved coronal holes
         self.ch_list.pack(fill=tk.BOTH, expand=True, anchor="s")
-        
-        self.update_coronal_hole_display() # Set up list (blank at first)
+
+        self.update_coronal_hole_display()  # Set up list (blank at first)
 
         # Merge frame setup
         self.bottom_frame = tk.Frame(self.left_frame)
@@ -174,13 +235,14 @@ class CoronalHoleClassifier:
 
         self.merge_rows = []
         self.merge_canvas = tk.Canvas(
-            self.bottom_frame, width=260, height=180, bg="lightgray")
+            self.bottom_frame, width=260, height=180, bg="lightgray"
+        )
         self.merge_items = tk.Frame(self.merge_canvas)
         scrollbar = tk.Scrollbar(
-            self.merge_items, orient="vertical", command=self.merge_canvas.yview)
+            self.merge_items, orient="vertical", command=self.merge_canvas.yview
+        )
         scrollbar.pack(side=tk.RIGHT, fill="y")
-        self.merge_canvas.create_window(
-            (0, 0), window=self.merge_items, anchor="nw")
+        self.merge_canvas.create_window((0, 0), window=self.merge_items, anchor="nw")
         self.merge_canvas.configure(yscrollcommand=scrollbar.set)
         self.merge_canvas.pack(side=tk.TOP)
 
@@ -188,11 +250,15 @@ class CoronalHoleClassifier:
         self.merge_actions.pack(side=tk.BOTTOM, padx=20, pady=10)
 
         self.merge_selection = Button(
-            self.merge_actions, text="Select for Merge", command=self.merge_select)
+            self.merge_actions, text="Select for Merge", command=self.merge_select
+        )
         self.merge_selection.pack(side=tk.LEFT, padx=20, pady=10)
 
         self.merge_button = Button(
-            self.merge_actions, text="Merge Selected Masks", command=self.merge_selected_masks)
+            self.merge_actions,
+            text="Merge Selected Masks",
+            command=self.merge_selected_masks,
+        )
         self.merge_button.pack(side=tk.RIGHT, padx=20, pady=10)
 
         self.masks_to_merge = []
@@ -207,7 +273,9 @@ class CoronalHoleClassifier:
         self.root.mainloop()
 
     def get_matching_sam_match(self):
-        mask_file = get_file_by_date(self.load_dir.filenames()[self.idx], self.masks_dir.filenames())
+        mask_file = get_file_by_date(
+            self.load_dir.filenames()[self.idx], self.masks_dir.filenames()
+        )
         self.masks = np.load(mask_file, allow_pickle=True)
 
     def update_detected_chs_count(self):
@@ -218,7 +286,7 @@ class CoronalHoleClassifier:
         self.detected_chs_entry.config(state="readonly")
 
     def bind_keys(self):
-        """ Binds keys to functions """
+        """Binds keys to functions"""
         self.root.bind("<space>", self.draw_masks_space_bar)
         self.root.bind("<d>", self.cycle_masks_d_key)
         self.root.bind("<m>", self.merge_select_hotkey)
@@ -234,36 +302,43 @@ class CoronalHoleClassifier:
         frame.update_idletasks()
 
     def inc_idx(self):
-        """ Increments index corresponding to which file in the folder corresponds to the image, to go forwards. """
+        """Increments index corresponding to which file in the folder corresponds to the image, to go forwards."""
         self.idx += 1
 
     def dec_idx(self):
-        """ Decrements index corresponding to which file in the folder corresponds to the image, to go backwards. """
+        """Decrements index corresponding to which file in the folder corresponds to the image, to go backwards."""
         self.idx -= 1
 
     def load_masks(self):
-        # TODO take self.masks_dir.filenames()[self.idx] 
-        #self.masks = np.load(self.masks_dir.filenames()[self.idx], allow_pickle=True)s
+        # TODO take self.masks_dir.filenames()[self.idx]
+        # self.masks = np.load(self.masks_dir.filenames()[self.idx], allow_pickle=True)s
         self.get_matching_sam_match()
-        self.masks = [self.masks[arr_str].item() for arr_str in self.masks
-                      if 5000 <= self.masks[arr_str].item()['area'] <= 1000000]
+        self.masks = [
+            self.masks[arr_str].item()
+            for arr_str in self.masks
+            if 5000 <= self.masks[arr_str].item()["area"] <= 1000000
+        ]
 
     def load_image(self, image):
-        """ Does through the process of loading a specific image into the GUI, including the clickable masks. """
+        """Does through the process of loading a specific image into the GUI, including the clickable masks."""
         # Set up image
-        self.image = image # Keep original image for processing
-        self.scale_factor = min(self.max_width / image.shape[1], 
-                                self.max_height / image.shape[0], 1.0)
+        self.image = image  # Keep original image for processing
+        self.scale_factor = min(
+            self.max_width / image.shape[1], self.max_height / image.shape[0], 1.0
+        )
         scaled_width = int(self.image.shape[1] * self.scale_factor)
         scaled_height = int(self.image.shape[0] * self.scale_factor)
-        self.scaled_image = cv2.resize(image, (scaled_width, scaled_height),
-                                       interpolation=cv2.INTER_AREA)
+        self.scaled_image = cv2.resize(
+            image, (scaled_width, scaled_height), interpolation=cv2.INTER_AREA
+        )
         self.tk_image = ImageTk.PhotoImage(Image.fromarray(self.scaled_image))
-        self.image_canvas.config(width=scaled_width, height=scaled_height) # Change canvas size to fit image
+        self.image_canvas.config(
+            width=scaled_width, height=scaled_height
+        )  # Change canvas size to fit image
 
         # Display image
-        self.image_canvas.delete("all") # Clear canvas
-        self.image_canvas.create_image(0, 0, anchor="nw", image=self.tk_image) 
+        self.image_canvas.delete("all")  # Clear canvas
+        self.image_canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
 
         print("LOADING MASKS")
         self.load_masks()
@@ -275,7 +350,8 @@ class CoronalHoleClassifier:
         # Convert mask to binary
         binary_mask = (mask > 0).astype(np.uint8)
         contours, _ = cv2.findContours(
-            binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
         if not contours:
             print("No contours found.")
             return
@@ -299,10 +375,8 @@ class CoronalHoleClassifier:
         # Scale and translate contour points to fit the canvas
         scaled_contour_points = [
             (
-                int((point[0][0] - x) * scale +
-                    (canvas_width - w * scale) / 2),
-                int((point[0][1] - y) * scale +
-                    (canvas_height - h * scale) / 2)
+                int((point[0][0] - x) * scale + (canvas_width - w * scale) / 2),
+                int((point[0][1] - y) * scale + (canvas_height - h * scale) / 2),
             )
             for point in largest_contour
         ]
@@ -311,22 +385,17 @@ class CoronalHoleClassifier:
         flattened_points = [coord for point in scaled_contour_points for coord in point]
 
         # Draw the polygon on the canvas
-        canvas.create_polygon(
-            flattened_points,
-            outline="blue",
-            fill="blue",
-            width=2
-        )
+        canvas.create_polygon(flattened_points, outline="blue", fill="blue", width=2)
 
     def save_selection_time(self):
         if self.selection_start_time is not None:
             selection_time = self.selection_end_time - self.selection_start_time
-            
+
             csv_file = os.path.join(self.save_dir, "selection_times.csv")
 
             existing_data = []
             if os.path.exists(csv_file):
-                with open(csv_file, mode='r', newline='') as file:
+                with open(csv_file, mode="r", newline="") as file:
                     reader = csv.reader(file)
                     existing_data = list(reader)
 
@@ -339,9 +408,10 @@ class CoronalHoleClassifier:
 
             if not updated:
                 existing_data.append(
-                    [self.load_dir.filenames()[self.idx], selection_time])
+                    [self.load_dir.filenames()[self.idx], selection_time]
+                )
 
-            with open(csv_file, mode='w', newline='') as file:
+            with open(csv_file, mode="w", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerows(existing_data)
             print(f"Time to select: {selection_time:0.2f}")
@@ -381,29 +451,38 @@ class CoronalHoleClassifier:
     #         writer.writerows(existing_data)
     #     print(f"Detected by SAM: {detected_by_sam}, True CHs: {true_chs}")
     #     print(f"All Detected?: {all_detected}")
-        
 
     def save_current_drawing(self):
         """Save the current drawing's data"""
         print("Saving Information")
         flags = [f["flagged"] for f in self.saved_masks]
-        data = {            
+        data = {
             "info": self.saved_masks,
-            "SAM Detected": self.detected_chs_entry.get(), #TODO
-            "True CHs": self.true_chs_entry.get(), #TODO
-            "All Detected": self.detected_chs_entry.get()==self.true_chs_entry.get(),
-            "Good Quality": True if all(flag is False for flag in flags) else False # TODO handle "Good Quality" vs "good_quality" in tests
+            "SAM Detected": self.detected_chs_entry.get(),  # TODO
+            "True CHs": self.true_chs_entry.get(),  # TODO
+            "All Detected": self.detected_chs_entry.get() == self.true_chs_entry.get(),
+            "Good Quality": True
+            if all(flag is False for flag in flags)
+            else False,  # TODO handle "Good Quality" vs "good_quality" in tests
         }
 
         print("SAVING DRAWING TO ")
         np.savez_compressed(
             # NOTE: Saving it without the data now
-            os.path.join(self.save_dir, str(os.path.basename(self.load_dir.filenames()[self.idx]).split(".")[0][:-4]) + ".npz"),
-            **data
+            os.path.join(
+                self.save_dir,
+                str(
+                    os.path.basename(self.load_dir.filenames()[self.idx]).split(".")[0][
+                        :-4
+                    ]
+                )
+                + ".npz",
+            ),
+            **data,
         )
         self.selection_end_time = perf_counter()
-        self.save_selection_time() # NOTE: Might want to keep this in .csv still since it is sort of seperate
-        #self.save_detection_fraction()        
+        self.save_selection_time()  # NOTE: Might want to keep this in .csv still since it is sort of seperate
+        # self.save_detection_fraction()
 
     def save_CH_masks(self):
         # Don't save if idx is None
@@ -421,8 +500,12 @@ class CoronalHoleClassifier:
         self.clear_frame(self.ch_list)
         self.update_detected_chs_count()
 
-        Label(self.ch_list, text="Saved Coronal Holes", font=self.labelFont).pack(pady=20) # Add title for list back
-        for saved_mask_idx, saved_coronal_hole in enumerate(self.saved_masks): # Add each saved CH information to list to display
+        Label(self.ch_list, text="Saved Coronal Holes", font=self.labelFont).pack(
+            pady=20
+        )  # Add title for list back
+        for saved_mask_idx, saved_coronal_hole in enumerate(
+            self.saved_masks
+        ):  # Add each saved CH information to list to display
             coronal_hole_id = saved_coronal_hole["id"]
             polarity = saved_coronal_hole["polarity"]
             confidence = saved_coronal_hole["confidence"]
@@ -437,18 +520,28 @@ class CoronalHoleClassifier:
             ch_canvas = Canvas(new_ch_frame, width=75, height=75)
             ch_canvas.pack(side="left", padx=4, pady=4)
             self.create_CH_polygon(segmentation, ch_canvas)
-            
+
             # Add label and corresponding remove button
-            ch_label = Label(new_ch_frame, font=self.labelFont, text=f"ID: {coronal_hole_id}, Polarity: {polarity}, Confidence: {confidence}, Flagged Bad: {flagged_bad}")
+            ch_label = Label(
+                new_ch_frame,
+                font=self.labelFont,
+                text=f"ID: {coronal_hole_id}, Polarity: {polarity}, Confidence: {confidence}, Flagged Bad: {flagged_bad}",
+            )
             ch_label.pack(side="left", pady=20, fill="x")
 
             # Command removes this specific coronal hole from list, button next to appropriate label
-            ch_remove_button = Button(new_ch_frame, text="-", bg="gray", borderwidth=5, anchor="w",
-                                      command=lambda: self.remove_coronal_hole(saved_mask_idx)) 
-            
-            ch_remove_button.pack(side="right", pady=20, fill="x") 
+            ch_remove_button = Button(
+                new_ch_frame,
+                text="-",
+                bg="gray",
+                borderwidth=5,
+                anchor="w",
+                command=lambda: self.remove_coronal_hole(saved_mask_idx),
+            )
 
-    def remove_coronal_hole(self, idx): 
+            ch_remove_button.pack(side="right", pady=20, fill="x")
+
+    def remove_coronal_hole(self, idx):
         removed_ch = self.saved_masks.pop(idx)
         print("Removed Coronal Hole " + str(removed_ch))
         self.update_coronal_hole_display()
@@ -457,26 +550,25 @@ class CoronalHoleClassifier:
         """Draws all masks on the disk"""
         self.mask_map = {}
         for i, ann in enumerate(self.masks):
-            segmentation = ann['segmentation']
-            scaled_segmentation = cv2.resize(segmentation.astype(np.uint8),
-                                             (self.scaled_image.shape[1],
-                                              self.scaled_image.shape[0]),
-                                             interpolation=cv2.INTER_NEAREST)
+            segmentation = ann["segmentation"]
+            scaled_segmentation = cv2.resize(
+                segmentation.astype(np.uint8),
+                (self.scaled_image.shape[1], self.scaled_image.shape[0]),
+                interpolation=cv2.INTER_NEAREST,
+            )
 
-            contours, _ = cv2.findContours(scaled_segmentation,
-                                           cv2.RETR_EXTERNAL,
-                                           cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(
+                scaled_segmentation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
 
-            color = "#{:02x}{:02x}{:02x}".format(
-                *np.random.randint(0, 255, size=3))
+            color = "#{:02x}{:02x}{:02x}".format(*np.random.randint(0, 255, size=3))
 
             for contour in contours:
-                contour_points = [(point[0][0], point[0][1])
-                                  for point in contour]
+                contour_points = [(point[0][0], point[0][1]) for point in contour]
                 poly_id = self.image_canvas.create_polygon(
                     *[coord for point in contour_points for coord in point],
                     fill=color,
-                    outline=color
+                    outline=color,
                 )
                 self.mask_map[poly_id] = i
 
@@ -490,9 +582,13 @@ class CoronalHoleClassifier:
         if next_package is None:
             print("No preloaded data available, loading synchronously...")
             self.idx = self.idx + 1 if self.idx is not None else 0
-            while (os.path.exists(os.path.join(self.save_dir,
+            while os.path.exists(
+                os.path.join(
+                    self.save_dir,
                     # TODO make load_dir sequential
-                   str(self.load_dir.filenames()[self.idx][:-4] + ".npz")))):
+                    str(self.load_dir.filenames()[self.idx][:-4] + ".npz"),
+                )
+            ):
                 self.inc_idx()
 
             self.load_image(np.array(self.get_next_image()))
@@ -500,30 +596,32 @@ class CoronalHoleClassifier:
             self.image_loader.start_loading(self.scale_factor, self.idx)
         else:
             # Update current index and apply preloaded data
-            self.idx = next_package['idx']
-            self.scaled_image = next_package['scaled_image']
-            self.tk_image = next_package['tk_image']
+            self.idx = next_package["idx"]
+            self.scaled_image = next_package["scaled_image"]
+            self.tk_image = next_package["tk_image"]
 
             # Update canvas size and draw image
-            self.image_canvas.config(width=next_package['width'],
-                                     height=next_package['height'])
+            self.image_canvas.config(
+                width=next_package["width"], height=next_package["height"]
+            )
             self.image_canvas.delete("all")
-            self.image_canvas.create_image(
-                0, 0, anchor="nw", image=self.tk_image)
+            self.image_canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
 
             # Update masks and draw using pre-calculated polygons
-            self.masks = [data['original_mask']
-                          for data in next_package['polygon_data']]
+            self.masks = [
+                data["original_mask"] for data in next_package["polygon_data"]
+            ]
             self.mask_map = {}
 
-            for i, mask_data in enumerate(next_package['polygon_data']):
-                for polygon in mask_data['polygons']:
+            for i, mask_data in enumerate(next_package["polygon_data"]):
+                for polygon in mask_data["polygons"]:
                     color = "#{:02x}{:02x}{:02x}".format(
-                        *np.random.randint(0, 255, size=3))
+                        *np.random.randint(0, 255, size=3)
+                    )
                     poly_id = self.image_canvas.create_polygon(
                         *[coord for point in polygon for coord in point],
                         fill=color,
-                        outline=color
+                        outline=color,
                     )
                     self.mask_map[poly_id] = i
 
@@ -571,25 +669,31 @@ class CoronalHoleClassifier:
         ch_canvas = Canvas(merge_frame, width=50, height=50)
         ch_canvas.pack(side="left", padx=4, pady=4)
         self.create_CH_polygon(
-            self.masks[self.mask_map[current_mask]]["segmentation"], ch_canvas)
+            self.masks[self.mask_map[current_mask]]["segmentation"], ch_canvas
+        )
 
-        merge_label = Label(
-            merge_frame, text=f"Mask {current_mask} selected to merge.")
+        merge_label = Label(merge_frame, text=f"Mask {current_mask} selected to merge.")
         merge_label.pack(side="left")
 
-        merge_remove_button = Button(merge_frame, text="-", bg="gray", borderwidth=5, anchor="w",
-                                     command=lambda: self.remove_merge_item(current_mask, merge_frame))
+        merge_remove_button = Button(
+            merge_frame,
+            text="-",
+            bg="gray",
+            borderwidth=5,
+            anchor="w",
+            command=lambda: self.remove_merge_item(current_mask, merge_frame),
+        )
         merge_remove_button.pack(side="right")
 
         self.merge_items.update_idletasks()
         self.merge_canvas.config(scrollregion=self.merge_canvas.bbox("all"))
 
     def merge_select_hotkey(self, event):
-        """ Binds the M key to merge_select """
+        """Binds the M key to merge_select"""
         self.merge_select()
 
     def merge_select(self):
-        """ Selects a mask for merging. """
+        """Selects a mask for merging."""
         print("M Pressed")
         current_mask = self.clicked_masks[self.clicked_masks_idx]
         if current_mask not in self.masks_to_merge:
@@ -597,7 +701,7 @@ class CoronalHoleClassifier:
             self.create_merge_item_row(current_mask)
 
     def merge_selected_masks(self):
-        """ Merges selected masks into one mask. """
+        """Merges selected masks into one mask."""
         if len(self.masks_to_merge) < 2:
             print("Need at least two masks to merge.")
             return
@@ -607,7 +711,8 @@ class CoronalHoleClassifier:
         for mask_id in self.masks_to_merge[1:]:
             mask_index = self.mask_map[mask_id]
             merged_mask = self.merge_masks(
-                merged_mask, self.masks[mask_index]["segmentation"])
+                merged_mask, self.masks[mask_index]["segmentation"]
+            )
 
         # Track items to remove
         polygons_to_remove = list(self.masks_to_merge)
@@ -629,7 +734,9 @@ class CoronalHoleClassifier:
             self.masks.pop(mask_index)
 
         # Add the merged mask
-        self.masks.append({"segmentation": np.array(merged_mask), "area": np.sum(merged_mask)})
+        self.masks.append(
+            {"segmentation": np.array(merged_mask), "area": np.sum(merged_mask)}
+        )
 
         # Reset selection and redraw
         self.reset_selection()
@@ -646,13 +753,16 @@ class CoronalHoleClassifier:
             return
 
         # Get the first mask (the one from which we'll subtract)
-        subtract_mask = self.masks[self.mask_map[self.masks_to_merge[0]]]["segmentation"]
-        
+        subtract_mask = self.masks[self.mask_map[self.masks_to_merge[0]]][
+            "segmentation"
+        ]
+
         # Subtract the remaining masks from the first mask
         for mask_id in self.masks_to_merge[1:]:
             mask_index = self.mask_map[mask_id]
-            subtract_mask = self.subtract_masks(subtract_mask,
-                                                self.masks[mask_index]["segmentation"])
+            subtract_mask = self.subtract_masks(
+                subtract_mask, self.masks[mask_index]["segmentation"]
+            )
 
         # Track items to remove
         polygons_to_remove = list(self.masks_to_merge)
@@ -674,7 +784,9 @@ class CoronalHoleClassifier:
             self.masks.pop(mask_index)
 
         # Add the subtracted mask
-        self.masks.append({"segmentation": np.array(subtract_mask), "area": np.sum(subtract_mask)})
+        self.masks.append(
+            {"segmentation": np.array(subtract_mask), "area": np.sum(subtract_mask)}
+        )
 
         # Reset selection and redraw
         self.reset_selection()
@@ -698,8 +810,7 @@ class CoronalHoleClassifier:
     def cycle_masks_d_key(self, event):
         print("D Pressed")
         self.reset_selection()
-        self.clicked_masks_idx = (
-            self.clicked_masks_idx + 1) % len(self.clicked_masks)
+        self.clicked_masks_idx = (self.clicked_masks_idx + 1) % len(self.clicked_masks)
         self.show_mask_item()
 
     def get_clicked_masks(self, event):
@@ -717,8 +828,8 @@ class CoronalHoleClassifier:
         return self.clicked_masks
 
     def show_mask_item(self):
-        """ Shows mask based on what has been clicked and the index"""
-        if len(self.clicked_masks)==0: # If no masks, nothing to show
+        """Shows mask based on what has been clicked and the index"""
+        if len(self.clicked_masks) == 0:  # If no masks, nothing to show
             return
 
         self.reset_selection()
@@ -727,16 +838,17 @@ class CoronalHoleClassifier:
         self.selected_mask = self.masks[mask_index]
         self.highlight_selected_mask(item)
         self.info_label.config(
-            text=f"Mask {mask_index} selected: Area={self.selected_mask['area']}")
+            text=f"Mask {mask_index} selected: Area={self.selected_mask['area']}"
+        )
 
     def on_mask_click(self, event):
         """Handle mask selection by clicking on it."""
         self.reset_selection()
-        self.get_clicked_masks(event) # Now have self.clicked_masks
-        self.show_mask_item()        
+        self.get_clicked_masks(event)  # Now have self.clicked_masks
+        self.show_mask_item()
 
     def highlight_selected_mask(self, selected_id):
-        """Highlight the selected mask with a red outline. Does not reset other masks. """
+        """Highlight the selected mask with a red outline. Does not reset other masks."""
         self.image_canvas.itemconfig(selected_id, outline="red", width=2)
 
     def save_coronal_hole(self):
@@ -747,9 +859,15 @@ class CoronalHoleClassifier:
         flag_button_value = bool(self.flag_button_value.get())
 
         # TODO add the .csv type stuff here
-        self.saved_masks.append({"mask_region": self.selected_mask, "id": coronal_hole_id,
-                                 "confidence": confidence, "polarity": polarity, 
-                                 "flagged": flag_button_value})
+        self.saved_masks.append(
+            {
+                "mask_region": self.selected_mask,
+                "id": coronal_hole_id,
+                "confidence": confidence,
+                "polarity": polarity,
+                "flagged": flag_button_value,
+            }
+        )
         self.update_coronal_hole_display()  # Update list of saved holes
 
     def destroy(self):
@@ -763,11 +881,31 @@ class CoronalHoleClassifier:
         self.root.destroy()
 
 
-def run_app(base_path, year=None):
+def run_app(base_path=None, year=None):
+    """
+    Launch the CHASM GUI application.
+
+    Args:
+        base_path: Root directory containing drawings, sam_masks, and tool_selections folders
+        year: Optional year subdirectory
+    """
+    import argparse
+
+    # If called from command line without arguments, parse them
+    if base_path is None:
+        parser = argparse.ArgumentParser(
+            description="CHASM - Coronal Hole Annotation Tool"
+        )
+        parser.add_argument("base_path", help="Root directory containing data folders")
+        parser.add_argument("--year", type=int, help="Year subdirectory (optional)")
+        args = parser.parse_args()
+        base_path = args.base_path
+        year = args.year
+
     # Global variables
     # TODO make this work with downloaded_dataset objects instead of folders
 
-    if year!=None:
+    if year != None:
         load_dir = f"{base_path}/drawings/{year}"
         masks_dir = f"{base_path}/sam_masks/{year}"
         save_dir = f"{base_path}/tool_selections/{year}"
@@ -777,7 +915,10 @@ def run_app(base_path, year=None):
         masks_dir = f"{base_path}/sam_masks"
         save_dir = f"{base_path}/tool_selections"
 
-    app = CoronalHoleClassifier(load_dir, masks_dir, save_dir, max_width=800, max_height=800)
+    app = CoronalHoleClassifier(
+        load_dir, masks_dir, save_dir, max_width=800, max_height=800
+    )
+
 
 # Create main window
 if __name__ == "__main__":
@@ -790,5 +931,6 @@ if __name__ == "__main__":
     save_dir = f"{ROOT}/tool_selections/{year}"
 
     # TODO make handle directory or DatasetObjects passed in (either a single dataset object or multiple)
-    app = CoronalHoleClassifier(load_dir, masks_dir, save_dir, max_width=1000, max_height=800)
-
+    app = CoronalHoleClassifier(
+        load_dir, masks_dir, save_dir, max_width=1000, max_height=800
+    )

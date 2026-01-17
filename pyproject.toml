@@ -6,10 +6,18 @@ build-backend = "uv_build"
 name = "CHASM"
 version = "0.1.0"
 dependencies = [
+    "astropy>=6.0.0",
+    "beautifulsoup4>=4.12.0",
     "ipykernel>=6.30.1",
     "matplotlib>=3.10.5",
+    "numpy>=1.26.0",
+    "opencv-python>=4.8.0",
+    "pillow>=10.0.0",
+    "pypdfium2>=4.26.0",
     "python-dotenv>=1.1.1",
+    "requests>=2.31.0",
     "sunpy[map]>=7.0.1",
+    "tqdm>=4.66.0",
 ]
 requires-python = ">=3.13"
 authors = [
@@ -37,5 +45,17 @@ classifiers = [
 [project.urls]
 Repository = "https://github.com/CBDevelopment/CHASM"
 
+[project.scripts]
+
 [project.gui-scripts]
-chasm = "app.run_app"
+chasm = "chasm.app.app:run_app"
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.13",
+]
