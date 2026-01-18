@@ -51,13 +51,17 @@ def find_closest_file(directory, target_datetime):
 
 
 def main(date, time, wavelength):
-    ROOT = "D:\WPI\MQP\CoronalHoles\src\experiments"
+    ROOT = r"D:\WPI\MQP\CoronalHoles\src\experiments"
 
     # Load the FITS file
     # Find the file with the closest date and time in the directory
-    fits_file = f"{ROOT}/{wavelength}/{find_closest_file(f'{ROOT}/{wavelength}', f'{date}{time}')}"
+    root_path = Path(ROOT)
+    wavelength_path = root_path / str(wavelength)
+    fits_file = str(
+        wavelength_path / find_closest_file(str(wavelength_path), f"{date}{time}")
+    )
     print(f"Loading FITS file: {fits_file}")
-    # fits_file = f"{ROOT}/{wavelength}/mag.fits"
+    # fits_file = str(wavelength_path / "mag.fits")
     # s_map = Map(fits_file)
     # print(s_map.instrument)
 

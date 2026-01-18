@@ -31,7 +31,7 @@ class MagResizer:
         try:
             # Create and resample the map
             mag_map = sunpy.map.Map(
-                f"{self.root}/{self.year}/{self.source_folder}/{fits_file}"
+                str(Path(self.root) / self.year / self.source_folder / fits_file)
             )
             resampled_map = mag_map.resample([512, 512] * u.pix)
 
@@ -47,7 +47,7 @@ class MagResizer:
 
             # Get original header and copy keywords
             with fits.open(
-                f"{self.root}/{self.year}/{self.source_folder}/{fits_file}"
+                str(Path(self.root) / self.year / self.source_folder / fits_file)
             ) as hdul:
                 original_header = hdul[1].header
 
@@ -125,7 +125,7 @@ class MagResizer:
 
     def view_fits(self, fits_file):
         """View a FITS file."""
-        resampled = f"{self.root}/{self.year}/{self.source_folder}/{fits_file}"
+        resampled = str(Path(self.root) / self.year / self.source_folder / fits_file)
         mag_map = sunpy.map.Map(resampled)
         print(mag_map.data.shape)
         norm = ImageNormalize(vmin=-100, vmax=100, stretch=LinearStretch())

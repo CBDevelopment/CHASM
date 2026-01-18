@@ -22,7 +22,9 @@ class MagResizer:
         """Process a single FITS file to create a resampled version."""
         try:
             # Create and resample the map
-            mag_map = sunpy.map.Map(f"{self.root}/{self.wavelength}/{fits_file}")
+            mag_map = sunpy.map.Map(
+                str(Path(self.root) / str(self.wavelength) / fits_file)
+            )
             resampled_map = mag_map.resample([512, 512] * u.pix)
 
             # Create a new header with proper ordering
@@ -36,7 +38,9 @@ class MagResizer:
             new_header["NAXIS2"] = 512
 
             # Get original header and copy keywords
-            with fits.open(f"{self.root}/{self.wavelength}/{fits_file}") as hdul:
+            with fits.open(
+                str(Path(self.root) / str(self.wavelength) / fits_file)
+            ) as hdul:
                 original_header = hdul[1].header
                 print("ORIGINAL HEADER: ", original_header)
 
@@ -85,7 +89,7 @@ class MagResizer:
                             )
 
             # Save resampled file
-            output_path = f"{self.root}/resampled_mag/{fits_file}"
+            output_path = str(Path(self.root) / "resampled_mag" / fits_file)
             compressed_resampled_map = CompImageHDU(
                 data=resampled_map.data,
                 header=new_header,
@@ -121,7 +125,7 @@ class MagResizer:
 
     def view_fits(self, fits_file):
         """View a FITS file."""
-        resampled = f"{self.root}/resampled_mag/{fits_file}"
+        resampled = str(Path(self.root) / "resampled_mag" / fits_file)
         mag_map = sunpy.map.Map(resampled)
         print(mag_map.data.shape)
         norm = ImageNormalize(vmin=-100, vmax=100, stretch=LinearStretch())
