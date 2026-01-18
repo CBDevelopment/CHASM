@@ -5,36 +5,49 @@ from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
 from tqdm import tqdm
 import cv2
 import os
+from pathlib import Path
+
 
 def show_anns(anns):
     if len(anns) == 0:
         return
-    sorted_anns = sorted(anns, key=(lambda x: x['area']), reverse=True)
+    sorted_anns = sorted(anns, key=(lambda x: x["area"]), reverse=True)
     ax = plt.gca()
     ax.set_autoscale_on(False)
 
-    img = np.ones((sorted_anns[0]['segmentation'].shape[0], sorted_anns[0]['segmentation'].shape[1], 4))
-    img[:,:,3] = 0
+    img = np.ones(
+        (
+            sorted_anns[0]["segmentation"].shape[0],
+            sorted_anns[0]["segmentation"].shape[1],
+            4,
+        )
+    )
+    img[:, :, 3] = 0
     for ann in sorted_anns:
-        m = ann['segmentation']
+        m = ann["segmentation"]
         print(m.shape)
         color_mask = np.concatenate([np.random.random(3), [0.35]])
         img[m] = color_mask
 
-    
     ax.imshow(img)
+
 
 # TODO make this work with command args
 
-def preprocess_sam(base_dir, 
-                   checkpoint, # TODO make this argument automated somehow?
-                   drawing_dir=None, save_dir=None, 
-                   model_type = "vit_h",
-                   device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
-    if base_dir!=None:
-        drawing_dir = os.path.join(base_dir, "drawings")
-        save_dir = os.path.join(base_dir, "sam_masks")
-    
+
+def preprocess_sam(
+    base_dir,
+    checkpoint,  # TODO make this argument automated somehow?
+    drawing_dir=None,
+    save_dir=None,
+    model_type="vit_h",
+    device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+):
+    if base_dir is not None:
+        base_path = Path(base_dir)
+        drawing_dir = base_path / "drawings"
+        save_dir = base_path / "sam_masks"
+
     if device.type == "cuda":
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
@@ -53,17 +66,19 @@ def preprocess_sam(base_dir,
     )
 
     # Process images
-    for image_path in tqdm(os.listdir(drawing_dir)):
-        save_path = os.path.join(save_dir, image_path[:-4] + "-masks.npz")
-        if os.path.exists(save_path):  # Skip already processed images
-            continue
-        if image_path == "README.md":
+    drawing_dir_path = Path(drawing_dir)
+    for image_file in tqdm(list(drawing_dir_path.iterdir())):
+        if not image_file.is_file() or image_file.name == "README.md":
             continue
 
-        print("Processing: ", image_path)
+        save_path = Path(save_dir) / f"{image_file.stem}-masks.npz"
+        if save_path.exists():  # Skip already processed images
+            continue
+
+        print("Processing: ", image_file.name)
         try:
             # Load and preprocess image
-            image = cv2.imread(os.path.join(DIR, image_path))
+            image = cv2.imread(str(Path(DIR) / image_file.name))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
             # Generate masks
@@ -86,8 +101,9 @@ def preprocess_sam(base_dir,
     # Free up model memory
     del sam
     if device.type == "cuda":
-       torch.cuda.empty_cache()
-       torch.cuda.ipc_collect()
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+
 
 if __name__ == "__main__":
     DIR = r"data_test_set\drawings\2017"
@@ -118,17 +134,19 @@ if __name__ == "__main__":
     )
 
     # Process images
-    for image_path in tqdm(os.listdir(DIR)):
-        save_path = os.path.join(SAVE_DIR, image_path[:-4] + "-masks.npz")
-        if os.path.exists(save_path):  # Skip already processed images
-            continue
-        if image_path == "README.md":
+    dir_path = Path(DIR)
+    for image_file in tqdm(list(dir_path.iterdir())):
+        if not image_file.is_file() or image_file.name == "README.md":
             continue
 
-        print("Processing: ", image_path)
+        save_path = Path(SAVE_DIR) / f"{image_file.stem}-masks.npz"
+        if save_path.exists():  # Skip already processed images
+            continue
+
+        print("Processing: ", image_file.name)
         try:
             # Load and preprocess image
-            image = cv2.imread(os.path.join(DIR, image_path))
+            image = cv2.imread(str(dir_path / image_file.name))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
             # Generate masks
@@ -151,5 +169,5 @@ if __name__ == "__main__":
     # Free up model memory
     del sam
     if DEVICE.type == "cuda":
-       torch.cuda.empty_cache()
-       torch.cuda.ipc_collect()
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()

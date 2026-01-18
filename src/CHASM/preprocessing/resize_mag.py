@@ -1,6 +1,6 @@
 import sunpy.map
 import matplotlib.pyplot as plt
-import os
+from pathlib import Path
 from astropy.visualization import AsinhStretch, LinearStretch
 from astropy.visualization.mpl_normalize import ImageNormalize
 import astropy.units as u
@@ -11,10 +11,11 @@ from astropy.io.fits.hdu.compressed import CompImageHDU
 from multiprocessing import Pool
 import numpy as np
 
-class MagResizer():
+
+class MagResizer:
     def __init__(self, root, wavelength):
         self.root = root
-        #self.year = year
+        # self.year = year
         self.wavelength = wavelength
 
     def process_single_file(self, fits_file):
@@ -22,17 +23,17 @@ class MagResizer():
         try:
             # Create and resample the map
             mag_map = sunpy.map.Map(f"{self.root}/{self.wavelength}/{fits_file}")
-            resampled_map = mag_map.resample([512, 512]*u.pix)
+            resampled_map = mag_map.resample([512, 512] * u.pix)
 
             # Create a new header with proper ordering
             new_header = fits.Header()
 
             # Add required keywords in the correct order
-            new_header['SIMPLE'] = True
-            new_header['BITPIX'] = -32
-            new_header['NAXIS'] = 2
-            new_header['NAXIS1'] = 512
-            new_header['NAXIS2'] = 512
+            new_header["SIMPLE"] = True
+            new_header["BITPIX"] = -32
+            new_header["NAXIS"] = 2
+            new_header["NAXIS1"] = 512
+            new_header["NAXIS2"] = 512
 
             # Get original header and copy keywords
             with fits.open(f"{self.root}/{self.wavelength}/{fits_file}") as hdul:
@@ -41,11 +42,27 @@ class MagResizer():
 
                 # Copy essential keywords
                 essential_keys = [
-                    'TELESCOP', 'INSTRUME', 'WAVELNTH', 'WCSNAME',
-                    'CTYPE1', 'CTYPE2', 'CRPIX1', 'CRPIX2',
-                    'CRVAL1', 'CRVAL2', 'CDELT1', 'CDELT2',
-                    'CUNIT1', 'CUNIT2', 'RSUN_OBS', 'RSUN_REF', 'R_SUN',
-                    'DATE-OBS', 'T_OBS', 'T_REC', 'BUNIT'
+                    "TELESCOP",
+                    "INSTRUME",
+                    "WAVELNTH",
+                    "WCSNAME",
+                    "CTYPE1",
+                    "CTYPE2",
+                    "CRPIX1",
+                    "CRPIX2",
+                    "CRVAL1",
+                    "CRVAL2",
+                    "CDELT1",
+                    "CDELT2",
+                    "CUNIT1",
+                    "CUNIT2",
+                    "RSUN_OBS",
+                    "RSUN_REF",
+                    "R_SUN",
+                    "DATE-OBS",
+                    "T_OBS",
+                    "T_REC",
+                    "BUNIT",
                 ]
 
                 for key in essential_keys:
@@ -54,24 +71,26 @@ class MagResizer():
                             new_header[key] = original_header[key]
                         except Exception as e:
                             print(
-                                f"Warning: Could not copy keyword {key} for {fits_file}: {str(e)}")
+                                f"Warning: Could not copy keyword {key} for {fits_file}: {str(e)}"
+                            )
 
                 # Copy HIERARCH keywords
                 for key in original_header:
-                    if key.startswith('HIERARCH'):
+                    if key.startswith("HIERARCH"):
                         try:
                             new_header[key] = original_header[key]
                         except Exception as e:
                             print(
-                                f"Warning: Could not copy HIERARCH keyword {key} for {fits_file}: {str(e)}")
+                                f"Warning: Could not copy HIERARCH keyword {key} for {fits_file}: {str(e)}"
+                            )
 
             # Save resampled file
             output_path = f"{self.root}/resampled_mag/{fits_file}"
             compressed_resampled_map = CompImageHDU(
                 data=resampled_map.data,
                 header=new_header,
-                compression_type='HCOMPRESS_1',
-                quantize_level=16.0
+                compression_type="HCOMPRESS_1",
+                quantize_level=16.0,
             )
             compressed_hdul = HDUList([PrimaryHDU(), compressed_resampled_map])
             compressed_hdul.writeto(output_path, overwrite=True)
@@ -80,14 +99,16 @@ class MagResizer():
         except ZeroDivisionError as e:
             return f"Error processing {fits_file}: {str(e)}"
 
-
     def main(self):
         # Get list of FITS files
-        fits_files = sorted([f for f in os.listdir(f"{self.root}/{self.wavelength}")
-                            if f.endswith(".fits")])
+        wavelength_path = Path(self.root) / str(self.wavelength)
+        fits_files = sorted(
+            [f.name for f in wavelength_path.iterdir() if f.suffix == ".fits"]
+        )
 
         # Create output directory if it doesn't exist
-        os.makedirs(f"{self.root}/resampled_mag", exist_ok=True)
+        resampled_dir = Path(self.root) / "resampled_mag"
+        resampled_dir.mkdir(parents=True, exist_ok=True)
 
         # Process files in parallel
         num_processes = 8
@@ -106,19 +127,21 @@ class MagResizer():
         norm = ImageNormalize(vmin=-100, vmax=100, stretch=LinearStretch())
         fig = plt.figure()
         ax = plt.subplot(projection=mag_map.wcs)
-        ax.imshow(mag_map.data, cmap='gray', norm=norm)
+        ax.imshow(mag_map.data, cmap="gray", norm=norm)
         ax.grid(False)
         plt.show()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     root = r"data\2016_SPoCA_CH_comparision\aia"
-    #year = r"2024_aia_fits"
+    # year = r"2024_aia_fits"
     wavelength = 6173
 
     resizer = MagResizer(root, wavelength)
     resizer.main()
 
-    resampled_files = sorted([f for f in os.listdir(f"{root}/resampled_mag")
-                              if f.endswith(".fits")])
+    resampled_dir = Path(root) / "resampled_mag"
+    resampled_files = sorted(
+        [f.name for f in resampled_dir.iterdir() if f.suffix == ".fits"]
+    )
     resizer.view_fits(resampled_files[2])

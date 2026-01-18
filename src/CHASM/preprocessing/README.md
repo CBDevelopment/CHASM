@@ -50,6 +50,6 @@ download_data(start_date='2023-01-01', end_date='2023-12-31')
 
 Segment Anything Model integration for automatic mask generation.
 
-**Purpose:** Pre-compute segmentation masks that serve as candidates for coronal hole annotation in the GUI.
+**Purpose:** Pre-compute segmentation masks that serve as candidates for coronal hole annotation in the gui.modules.
 
 See `sam/README.md` for detailed usage.
