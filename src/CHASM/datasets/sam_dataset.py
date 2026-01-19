@@ -6,7 +6,7 @@ import torch
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 import numpy as np
 from tqdm import tqdm
-from .drawings_dataset import DrawingsDataset
+from .google_drive.drawings_dataset import DrawingsDataset
 
 
 # TODO check if has any usage and clean up as needed in that case

@@ -1,30 +1,6 @@
-import cv2
-from pathlib import Path
-import warnings
-from astropy.coordinates import SkyCoord
-from astropy.nddata import block_reduce
-from aiapy.calibrate import correct_degradation
-import tarfile
-import zipfile
-import gdown
-import astropy
-from multiprocessing import Pool
-from sunpy.map import Map as sunpyMap
-from .folder_utils import extract_date, get_file_by_date
-from aiapy.calibrate.utils import get_correction_table
-from sunpy.map import Map, all_coordinates_from_map
-from sunpy.map.sources import HMIMap
-import matplotlib.pyplot as plt
-import torch
-from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
-import shutil
-import logging
-import re
-from astropy.visualization import AsinhStretch, ImageNormalize, LinearStretch
-
-from .drawings_dataset import DrawingsDataset
-from .aia_dataset import AIADataset
-from .chasm_dataset import CHASMDataset
+from .google_drive.drawings_dataset import DrawingsDataset
+from .google_drive.aia_dataset import AIADataset
+from .google_drive.chasm_dataset import CHASMDataset
 from .fits_dataset import FITSDataset
 from .chronnos_dataset import (
     CHRONNOSDataset,
@@ -155,9 +131,9 @@ class CombinedDataset:
     #     self.app_save_dir = os.path.join(self.root, "chasm")
 
     #     if fetch_online:
-    #         self.aia_dataset = AIADataset(root=os.path.join(root, "aia_wavelengths"))
-    #         self.drawings_dataset = DrawingsDataset(root=os.path.join(root, "drawings"))
-    #         self.chasm_dataset = CHASMDataset(root=os.path.join(root, "chasm"))
+    #         self.google_drive.aia_dataset = AIADataset(root=os.path.join(root, "aia_wavelengths"))
+    #         self.google_drive.drawings_dataset = DrawingsDataset(root=os.path.join(root, "drawings"))
+    #         self.google_drive.chasm_dataset = CHASMDataset(root=os.path.join(root, "chasm"))
 
     # def process_sam_masks(self):
     #     self.sam = SAMDataset(root=os.path.join(self.root, "sam_masks"))
@@ -167,7 +143,7 @@ class CombinedDataset:
     #     if self.sam == None:
     #         print("Cannot load app without SAM masks")
     #     if self.app==None:
-    #         self.app = CoronalHoleClassifier(self.drawings_dataset.filenames(),
+    #         self.app = CoronalHoleClassifier(self.google_drive.drawings_dataset.filenames(),
     #                                          self.sam,
     #                                          self.app_save_dir,
     #                                          max_width=1000,
@@ -176,7 +152,7 @@ class CombinedDataset:
     # def preprocess_chronnos(self):
     #     self.fits_dataset = FITSDataset(root=os.path.join(self.root, "fits"))
     #     self.chronnos = CHRONNOSDataset(root=os.path.join(self.root, "chronnos"))
-    #     self.chronnos.build(self.aia_dataset, self.fits_dataset)
+    #     self.chronnos.build(self.google_drive.aia_dataset, self.fits_dataset)
 
 
 # Usage example:

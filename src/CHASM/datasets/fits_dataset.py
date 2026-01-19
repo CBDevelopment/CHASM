@@ -5,8 +5,8 @@ from astropy.io import fits
 import numpy as np
 from tqdm import tqdm
 import torch
-from .chasm_dataset import CHASMDataset
-from .drawings_dataset import DrawingsDataset
+from .google_drive.chasm_dataset import CHASMDataset
+from .google_drive.drawings_dataset import DrawingsDataset
 from .folder_utils import extract_date, get_file_by_date
 
 

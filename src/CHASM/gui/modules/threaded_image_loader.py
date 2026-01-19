@@ -77,6 +77,7 @@ class ThreadedImageLoader:
 
                     # Load and process image
                     file_path = self.load_dir.filenames()[next_idx]
+                    file_name = Path(file_path).name
                     img = Image.open(file_path)
                     img_array = np.array(img)
 

@@ -1,13 +1,16 @@
 import tkinter as tk
 import numpy as np
 from time import perf_counter
+from pathlib import Path
 
-from .modules.mask_manager import MaskManager
-from .modules.image_manager import ImageManager
-from .modules.data_persistence import DataPersistenceManager
-from .modules.annotation_manager import AnnotationManager
-from .modules.gui_builder import GUIComponentBuilder
-from .modules.event_handler import EventHandler
+import argparse
+
+from chasm.gui.modules.mask_manager import MaskManager
+from chasm.gui.modules.image_manager import ImageManager
+from chasm.gui.modules.data_persistence import DataPersistenceManager
+from chasm.gui.modules.annotation_manager import AnnotationManager
+from chasm.gui.modules.gui_builder import GUIComponentBuilder
+from chasm.gui.modules.event_handler import EventHandler
 
 
 # TODO have app save in JUST .npz format, having the .csv is kind of confusing
@@ -298,73 +301,70 @@ def run_app(
     """
     Launch the CHASM GUI application.
 
+    Can be called programmatically with dataset objects, or will parse command-line
+    arguments if datasets are not provided.
+
     Args:
-        drawings_dataset: DrawingsDataset object (required, or pass root via CLI)
-        sam_dataset: SAMDataset object for masks (required, or pass root via CLI)
-        save_dir: Directory to save tool selections (required, or pass via CLI)
+        drawings_dataset: DrawingsDataset object (optional, will parse from CLI if None)
+        sam_dataset: SAMDataset object for masks (optional, will parse from CLI if None)
+        save_dir: Directory to save tool selections (optional, will parse from CLI if None)
         max_width: Maximum canvas width (default: 1000)
         max_height: Maximum canvas height (default: 800)
-
-    Examples:
-        >>> from chasm.datasets import DrawingsDataset, SAMDataset
-        >>> drawings = DrawingsDataset(root="data/drawings", fetch_online=False)
-        >>> sam_masks = SAMDataset(root="data/sam_masks")
-        >>> run_app(drawings, sam_masks, "data/tool_selections")
     """
-    import argparse
-    from chasm.datasets import DrawingsDataset, SAMDataset
+    # If datasets not provided, parse command-line arguments
+    if drawings_dataset is None or sam_dataset is None or save_dir is None:
+        from chasm.datasets.google_drive import DrawingsDataset
+        from chasm.datasets.google_drive import SAMMaskDataset
 
-    # If called from command line without arguments, parse them
-    if drawings_dataset is None:
         parser = argparse.ArgumentParser(
-            description="CHASM - Coronal Hole Annotation Tool"
+            description="CHASM GUI - Coronal Hole Annotation Tool"
         )
         parser.add_argument(
             "--drawings",
-            required=True,
-            help="Drawings dataset root directory",
+            type=str,
+            default="download_data/drawings",
+            help="Path to drawings dataset directory (default: download_data/drawings)",
         )
         parser.add_argument(
-            "--sam-masks",
-            required=True,
-            help="SAM masks dataset root directory",
+            "--masks",
+            type=str,
+            default="download_data/masks",
+            help="Path to SAM masks dataset directory (default: download_data/masks)",
         )
         parser.add_argument(
             "--save-dir",
-            required=True,
-            help="Tool selections save directory",
+            type=str,
+            default="tool_selections",
+            help="Directory to save tool selections (default: tool_selections)",
         )
         parser.add_argument(
-            "--max-width", type=int, default=1000, help="Maximum canvas width"
-        )
-        parser.add_argument(
-            "--max-height", type=int, default=800, help="Maximum canvas height"
-        )
-        parser.add_argument(
-            "--no-download",
+            "--download",
             action="store_true",
-            help="Don't attempt to download datasets online",
+            help="Download datasets from online if not present (sets fetch_online=True)",
         )
+        parser.add_argument(
+            "--max-width",
+            type=int,
+            default=1000,
+            help="Maximum canvas width (default: 1000)",
+        )
+        parser.add_argument(
+            "--max-height",
+            type=int,
+            default=800,
+            help="Maximum canvas height (default: 800)",
+        )
+
         args = parser.parse_args()
 
+        # Create datasets from parsed arguments
+        drawings_dataset = DrawingsDataset(
+            root=args.drawings, fetch_online=args.download
+        )
+        sam_dataset = SAMMaskDataset(root=args.masks, fetch_online=args.download)
+        save_dir = args.save_dir
         max_width = args.max_width
         max_height = args.max_height
-        fetch_online = not args.no_download
-
-        # Create dataset objects from CLI arguments
-        drawings_dataset = DrawingsDataset(
-            root=args.drawings, fetch_online=fetch_online
-        )
-        sam_dataset = SAMDataset(root=args.sam_masks)
-        save_dir = args.save_dir
-
-    # Validate required arguments
-    if drawings_dataset is None:
-        raise ValueError("drawings_dataset is required")
-    if sam_dataset is None:
-        raise ValueError("sam_dataset is required")
-    if save_dir is None:
-        raise ValueError("save_dir is required")
 
     app = CHASM_GUI(
         drawings_dataset,
@@ -376,13 +376,4 @@ def run_app(
 
 
 if __name__ == "__main__":
-    # Example usage with dataset objects
-    from chasm.datasets import DrawingsDataset, SAMDataset
-
-    drawings = DrawingsDataset(root="test/drawings", fetch_online=False)
-    sam_masks = SAMDataset(root="test/sam_masks")
-    run_app(
-        drawings_dataset=drawings,
-        sam_dataset=sam_masks,
-        save_dir="test/tool_selections",
-    )
+    run_app()

@@ -54,9 +54,7 @@ classifiers = [
 Repository = "https://github.com/CBDevelopment/CHASM"
 
 [project.scripts]
-download_data = "chasm.datasets.cli_data:main"
-train_model = "chasm.model_training.train_model:main"
-generate_stats = "chasm.stats.cli_stats:main"
+download_data = "chasm.datasets.data_cli:main"
 
 [project.gui-scripts]
 chasm = "chasm.gui.app:run_app"

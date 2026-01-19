@@ -46,11 +46,18 @@ class DataPersistenceManager:
         basename = Path(filename).name
         save_path = Path(self.save_dir) / f"{basename.split('.')[0][:-4]}.npz"
         print(f"SAVING DRAWING TO {save_path}")
+
+        # Create directory if it doesn't exist
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+
         np.savez_compressed(save_path, **data)
 
     def save_selection_time(self, filename: str, selection_time: float) -> None:
         """Save the time taken to select annotations for the current image."""
         csv_file = Path(self.save_dir) / "selection_times.csv"
+
+        # Create directory if it doesn't exist
+        csv_file.parent.mkdir(parents=True, exist_ok=True)
 
         existing_data = []
         if csv_file.exists():

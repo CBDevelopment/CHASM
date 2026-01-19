@@ -50,7 +50,7 @@ Helper functions for file organization and date-based file matching.
 ## Usage
 
 ```python
-from datasets.chasm_dataset import CHASMDataset
+from datasets.google_drive.chasm_dataset import CHASMDataset
 from datasets.folder_utils import get_file_by_date
 
 # Load annotated data

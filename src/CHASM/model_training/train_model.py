@@ -17,8 +17,13 @@ from chronnos.data.convert import (
     _MapConverter,
 )
 
-from chasm.datasets.aia_dataset import AIADataset
-from chasm.datasets.chasm_dataset import CHASMDataset, CHASM1407, CHASM1111, CHASM960
+from chasm.datasets.google_drive.aia_dataset import AIADataset
+from chasm.datasets.google_drive.chasm_dataset import (
+    CHASMDataset,
+    CHASM1407,
+    CHASM1111,
+    CHASM960,
+)
 from chasm.datasets.fits_dataset import FITSDataset
 from chasm.datasets.chronnos_dataset import CHRONNOSDataset, DefaultChronnosConfig
 

@@ -15,9 +15,14 @@ from chronnos.evaluate.detect import (
 )
 import torch
 
-from chasm.datasets.drawings_dataset import DrawingsDataset
-from chasm.datasets.aia_dataset import AIADataset
-from chasm.datasets.chasm_dataset import CHASMDataset, CHASM960, CHASM1111, CHASM1407
+from chasm.datasets.google_drive.drawings_dataset import DrawingsDataset
+from chasm.datasets.google_drive.aia_dataset import AIADataset
+from chasm.datasets.google_drive.chasm_dataset import (
+    CHASMDataset,
+    CHASM960,
+    CHASM1111,
+    CHASM1407,
+)
 from chasm.datasets.fits_dataset import FITSDataset
 from chasm.datasets.chronnos_dataset import (
     CHRONNOSDataset,

@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 import json
 from .auto_download_dataset import AutoDownloadDataset
-from .folder_utils import extract_date
+from ..folder_utils import extract_date
 
 
 class CHASMDataset(AutoDownloadDataset):
