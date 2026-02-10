@@ -17,7 +17,15 @@ from chasm.gui.modules.event_handler import EventHandler
 class CHASM_GUI:
     """Main coordinator for the Coronal Hole Annotation application."""
 
-    def __init__(self, load_dir, masks_dir, save_dir, max_width=800, max_height=600):
+    def __init__(
+        self,
+        load_dir,
+        masks_dir,
+        save_dir,
+        max_width=800,
+        max_height=600,
+        scale_factor=1,
+    ):
         # Timing for performance tracking
         self.selection_start_time = None
         self.selection_end_time = None
@@ -34,7 +42,9 @@ class CHASM_GUI:
         self.root = tk.Tk()
 
         # Build GUI
-        self.gui_builder = GUIComponentBuilder(self.root, max_width, max_height)
+        self.gui_builder = GUIComponentBuilder(
+            self.root, max_width, max_height, scale_factor
+        )
         self.gui_builder.build_gui(
             on_previous_drawing=self.previous_drawing,
             on_next_drawing=self.next_drawing,
@@ -297,6 +307,7 @@ def run_app(
     save_dir=None,
     max_width=1000,
     max_height=800,
+    scale_factor=1,
 ):
     """
     Launch the CHASM GUI application.
@@ -313,8 +324,8 @@ def run_app(
     """
     # If datasets not provided, parse command-line arguments
     if drawings_dataset is None or sam_dataset is None or save_dir is None:
-        from chasm.datasets.google_drive import DrawingsDataset
-        from chasm.datasets.google_drive import SAMMaskDataset
+        from chasm.data import DrawingsDataset
+        from chasm.data import SAMMaskDataset
 
         parser = argparse.ArgumentParser(
             description="CHASM GUI - Coronal Hole Annotation Tool"
@@ -354,6 +365,12 @@ def run_app(
             default=800,
             help="Maximum canvas height (default: 800)",
         )
+        parser.add_argument(
+            "--scale",
+            type=float,
+            default=1.0,
+            help="GUI scale factor for buttons and text (default: 1.0)",
+        )
 
         args = parser.parse_args()
 
@@ -365,6 +382,7 @@ def run_app(
         save_dir = args.save_dir
         max_width = args.max_width
         max_height = args.max_height
+        scale_factor = args.scale
 
     app = CHASM_GUI(
         drawings_dataset,
@@ -372,6 +390,7 @@ def run_app(
         save_dir,
         max_width=max_width,
         max_height=max_height,
+        scale_factor=scale_factor,
     )
 
 

@@ -7,7 +7,7 @@ from PIL import Image, ImageTk
 from queue import Queue
 from threading import Thread, Lock
 import time
-from chasm.datasets.folder_utils import get_file_by_date
+from chasm.data.folder_utils import get_file_by_date
 
 
 # TODO make this take datasets

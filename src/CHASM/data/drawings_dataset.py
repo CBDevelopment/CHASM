@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 class DrawingsDataset(AutoDownloadDataset):
-    def __init__(self, root="download_data/drawings", fetch_online=True):
+    def __init__(self, root="download_data/drawings", fetch_online=False):
         self.root = root
         if fetch_online:
             file_id = "1HakI-i6iXuqWDFywPx7Ae6RvqIx5tu-0"
@@ -18,3 +18,10 @@ class DrawingsDataset(AutoDownloadDataset):
 
     def filenames(self) -> list[str]:
         return sorted((str(p) for p in Path(self.root).rglob("*") if p.is_file()))
+
+    def __len__(self):
+        return len(self.file_paths)
+
+    def __getitem__(self, idx):
+        file_path = self.file_paths[idx]
+        return file_path

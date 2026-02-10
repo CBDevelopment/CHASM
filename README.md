@@ -15,12 +15,15 @@ Code available upon acceptance.
 
 ## CLI
 
-Need to:
+TODO:
 
-- download data
-- run CHASM
-- collect AIA imagery
-- preprocess SAM masks
-- crop the masks to solar disk
-- preprocess CHRONNOS data
-- train the CHRONNOS model
+- Download script for SWPC maps from website
+- Convert PDF SWPC maps to JPG
+- SAM segmentation script
+- CHASM tool (takes in Drawings and Segmentations)
+- AIA download script, aligns with SWPC maps
+- Circle detection script (Hough transform)
+- Crop CHASM data to circle
+- Split CHASM data to 1407, 1111, 970
+- Train/test CHRONNOS
+- MOSWOC with CHASM

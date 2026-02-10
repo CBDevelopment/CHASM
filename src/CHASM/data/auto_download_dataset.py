@@ -3,6 +3,9 @@ import tarfile
 import zipfile
 import gdown
 from torch.utils.data import Dataset
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AutoDownloadDataset(Dataset):
@@ -48,12 +51,12 @@ class AutoDownloadDataset(Dataset):
     def _download(self):
         self.root.mkdir(parents=True, exist_ok=True)
         archive_path = self.root / self.filename
-        print(f"Downloading from {self.url} to {archive_path}...")
+        logger.info(f"Downloading from {self.url} to {archive_path}...")
         gdown.download(self.url, str(archive_path), quiet=False)
         return archive_path
 
     def _extract(self, archive_path):
-        print(f"Extracting {archive_path} to {self.root}...")
+        logger.info(f"Extracting {archive_path} to {self.root}...")
         if (
             archive_path.suffixes[-2:] == [".tar", ".gz"]
             or archive_path.suffix == ".tgz"
@@ -69,7 +72,7 @@ class AutoDownloadDataset(Dataset):
 
     def prepare(self):
         if self._check_exists():
-            print(f"Dataset already exists at {self.root}, skipping download.")
+            logger.info(f"Dataset already exists at {self.root}, skipping download.")
         elif self.url and self.filename:
             archive_path = self._download()
             self._extract(archive_path)
@@ -80,4 +83,4 @@ class AutoDownloadDataset(Dataset):
                     f"Dataset not found at {self.root}. "
                     "Set fetch_online=True to download, or ensure the data exists at the specified path."
                 )
-        print("Dataset is ready.")
+        logger.info("Dataset is ready.")

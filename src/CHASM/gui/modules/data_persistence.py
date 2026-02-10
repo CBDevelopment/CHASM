@@ -2,7 +2,7 @@ import numpy as np
 from pathlib import Path
 import csv
 from typing import Optional, List, Dict, Any
-from chasm.datasets.folder_utils import get_file_by_date
+from chasm.data.folder_utils import get_file_by_date
 
 
 class DataPersistenceManager:

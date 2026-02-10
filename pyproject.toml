@@ -23,8 +23,8 @@ dependencies = [
     "requests>=2.31.0",
     "segment-anything>=1.0",
     "sunpy[map]>=7.0.1",
-    "torch>=2.9.1",
-    "torchvision>=0.24.1",
+    "torch",
+    "torchvision",
     "tqdm>=4.66.0",
 ]
 requires-python = ">=3.13"
@@ -42,8 +42,7 @@ maintainers = [
 
 description = "Coronal Hole Annotation using Semi-automatic Methods (CHASM)"
 readme = "README.md"
-license = "GPL-3.0-or-later"
-license-files = ["COPYING"]
+license = {file = "COPYING"}
 keywords = ["solar physics", "coronal holes", "machine learning", "data annotation", "sunpy"]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -62,12 +61,19 @@ chasm = "chasm.gui.app:run_app"
 [tool.uv]
 package = true
 
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+
 [tool.uv.sources]
+torch = { index = "pytorch-cu118" }
+torchvision = { index = "pytorch-cu118" }
 
 [dependency-groups]
 dev = [
     "ruff>=0.14.13",
     "pytest>=8.0.0",
+    "pytest-cov>=7.0.0",
 ]
 chronnos = [
     "drms>=0.6.0",

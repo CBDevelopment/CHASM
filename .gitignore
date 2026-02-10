@@ -218,3 +218,5 @@ __marimo__/
 download_data/
 
 example/
+
+pipeline_tests/
