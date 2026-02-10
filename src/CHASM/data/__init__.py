@@ -1,7 +1,7 @@
 """CHASM Dataset Utilities"""
 
 # Core datasets
-from .aia_dataset import AIADataset
+from .sdo_dataset import SDODataset
 from .drawings_dataset import DrawingsDataset
 from .chasm_dataset import CHASMDataset
 from .sam_mask_dataset import SAMMaskDataset
@@ -11,7 +11,7 @@ from .fits_dataset import FITSDataset
 from .prediction_dataset import PredictionDataset
 
 __all__ = [
-    "AIADataset",
+    "SDODataset",
     "DrawingsDataset",
     "CHASMDataset",
     "SAMMaskDataset",

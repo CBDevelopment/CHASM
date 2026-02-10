@@ -180,9 +180,16 @@ class AIAImageDownloader:
         "INSTRUME",
     ]
 
-    def __init__(self, save_path: Path, email: str = None):
-        self.save_path = save_path
-        self.save_path.mkdir(parents=True, exist_ok=True)
+    def __init__(
+        self,
+        full_save_path: Path,
+        resampled_save_path: Path,
+        email: str = None,
+    ):
+        self.full_save_path = full_save_path
+        self.resampled_save_path = resampled_save_path
+        self.full_save_path.mkdir(parents=True, exist_ok=True)
+        self.resampled_save_path.mkdir(parents=True, exist_ok=True)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.drms_client = drms.Client(email=email) if email else drms.Client()
         self.wavelengths = self.DEFAULT_WAVELENGTHS
@@ -234,8 +241,8 @@ class AIAImageDownloader:
         wl_dir = str(wavelength or 6173)  # Use 6173 for HMI magnetograms
         filename = f"{dt.date().isoformat()}.fits"
 
-        full_dir = self.save_path / f"{year_dir}_FullSize" / wl_dir
-        resampled_dir = self.save_path / year_dir / wl_dir
+        full_dir = self.full_save_path / year_dir / wl_dir
+        resampled_dir = self.resampled_save_path / year_dir / wl_dir
         return full_dir / filename, resampled_dir / filename
 
     def _fetch_query_metadata(self, query: JSOCQuery) -> dict:
@@ -402,8 +409,10 @@ class AIAImageDownloader:
 
 
 class CHASM_AIADownloader(AIAImageDownloader):
-    def __init__(self, save_path: Path, email: str = None):
-        super().__init__(save_path, email)
+    def __init__(
+        self, full_save_path: Path, resampled_save_path: Path, email: str = None
+    ):
+        super().__init__(full_save_path, resampled_save_path, email)
 
     def _parse_swpc_drawing_timestamp(self, drawing_filename: str) -> datetime:
         base_name = Path(drawing_filename).stem
@@ -595,9 +604,12 @@ class CHASM_AIADownloader(AIAImageDownloader):
 
 
 if __name__ == "__main__":
-    SAVE_DIR = Path("D:/projects/research/CHASM/download_data/aia_imagery")
+    FULL_SAVE_DIR = Path("D:/projects/research/CHASM/download_data/aia_imagery_full")
+    RESAMPLED_SAVE_DIR = Path("D:/projects/research/CHASM/download_data/aia_imagery")
     downloader = CHASM_AIADownloader(
-        save_path=SAVE_DIR, email="cbeckdevelopment@gmail.com"
+        full_save_path=FULL_SAVE_DIR,
+        resampled_save_path=RESAMPLED_SAVE_DIR,
+        email="cbeckdevelopment@gmail.com",
     )
 
     # Test with a small set of dates and wavelengths
@@ -642,7 +654,7 @@ if __name__ == "__main__":
         pairs_to_process = []
 
         for year in years:
-            full_root = SAVE_DIR / f"{year}_FullSize"
+            full_root = FULL_SAVE_DIR / str(year)
             if not full_root.exists():
                 continue
             for wl_dir in full_root.iterdir():

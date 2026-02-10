@@ -69,17 +69,19 @@ class SWPCDrawingsScraper:
 
         return best_candidate_link
 
-    def _download_and_save_image(self, image_url: str, filename: str) -> Path | None:
+    def _download_and_save_image(
+        self, image_url: str, filename: str, year: str
+    ) -> Path | None:
         """Download an image from the URL and save it to disk."""
-        logger.info(f"Downloading image from {image_url}")
 
         image_response = requests.get(image_url)
 
         if image_response.status_code == 200:
-            save_file = self.save_path / filename
+            year_dir = self.save_path / year
+            year_dir.mkdir(parents=True, exist_ok=True)
+            save_file = year_dir / filename
             with open(save_file, "wb") as f:
                 f.write(image_response.content)
-            logger.info(f"Saved synoptic map to {save_file}")
             if self.convert_pdf_to_jpg and save_file.suffix.lower() == ".pdf":
                 pdf = pdfium.PdfDocument(str(save_file))
                 page = pdf.get_page(0)
@@ -100,6 +102,26 @@ class SWPCDrawingsScraper:
         """Get the synoptic drawing closest to the given date and time."""
         year, month, day = date.split("-")
         hours, minutes = time.split(":")
+        target_time = f"{hours}{minutes}"
+
+        # Check local cache first to avoid unnecessary downloads
+        year_dir = self.save_path / year
+        if year_dir.exists():
+            local_pattern = f"boul_neutl_fd_{year}{month}{day}_*."
+            local_files = list(year_dir.glob(local_pattern + "jpg")) + list(
+                year_dir.glob(local_pattern + "pdf")
+            )
+            if local_files:
+                best_local = local_files[0]
+                best_time = int(best_local.stem.split("_")[-1])
+                for candidate in local_files:
+                    candidate_time = int(candidate.stem.split("_")[-1])
+                    if abs(candidate_time - int(target_time)) < abs(
+                        best_time - int(target_time)
+                    ):
+                        best_local = candidate
+                        best_time = candidate_time
+                return best_local
 
         url = f"{self.drawing_url}/{year}/{month}/"
         response = self._fetch_directory_listing(url)
@@ -114,7 +136,6 @@ class SWPCDrawingsScraper:
             logger.warning(f"No synoptic map found for {date}")
             return None
 
-        target_time = f"{hours}{minutes}"
         best_candidate = self._find_best_candidate(image_candidates, target_time)
 
         if not best_candidate:
@@ -125,14 +146,13 @@ class SWPCDrawingsScraper:
             final_filename = filename.replace(".pdf", ".jpg")
         else:
             final_filename = filename
-        final_path = self.save_path / final_filename
+        final_path = self.save_path / year / final_filename
 
         if final_path.exists():
-            logger.info(f"File already exists: {final_path}")
             return final_path
 
         image_url = url + filename
-        return self._download_and_save_image(image_url, filename)
+        return self._download_and_save_image(image_url, filename, year)
 
     def get_drawings_for_date_range(
         self, start_date: str, end_date: str, time: str = "00:00"
