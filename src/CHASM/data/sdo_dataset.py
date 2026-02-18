@@ -4,7 +4,6 @@ from pathlib import Path
 from .auto_download_dataset import AutoDownloadDataset
 
 
-# TODO: Cutter - Upload new data set of all images because mags are properly resized now
 class SDODataset(AutoDownloadDataset):
     def __init__(self, root="download_data/aia_wavelengths", fetch_online=False):
         if fetch_online:
@@ -15,6 +14,7 @@ class SDODataset(AutoDownloadDataset):
                 filename="aia.tar.gz",
                 url=url,
             )
+
         else:
             super().__init__(root)
 

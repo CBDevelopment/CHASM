@@ -1,10 +1,10 @@
 from .swpc_drawings_scraper import SWPCDrawingsScraper
 from .sam_segmentation_masks import SAMSegmentationMasksGenerator
-from .aia_imagery import CHASM_AIADownloader, JSOCQuery
+from .aia_imagery import CHASMSDODownloader, JSOCQuery
 
 __all__ = [
     "SWPCDrawingsScraper",
     "SAMSegmentationMasksGenerator",
-    "CHASM_AIADownloader",
+    "CHASMSDODownloader",
     "JSOCQuery",
 ]

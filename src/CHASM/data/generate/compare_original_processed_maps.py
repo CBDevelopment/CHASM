@@ -1,3 +1,21 @@
+"""Compare two SDO wavelengths for the same date side by side.
+
+Directory layout expected:
+    <base>/{year}/{wavelength}/{date}.fits
+
+Usage:
+    python compare_original_processed_maps.py [date] [wl1] [wl2]
+
+    date : YYYY-MM-DD  (default: first available date)
+    wl1  : wavelength  (default: 193)
+    wl2  : wavelength  (default: 171)
+
+Examples:
+    python compare_original_processed_maps.py 2017-01-01 193 171
+    python compare_original_processed_maps.py 2017-01-01
+    python compare_original_processed_maps.py
+"""
+
 from pathlib import Path
 import sys
 import numpy as np
@@ -10,29 +28,26 @@ from astropy.visualization import (
     LinearStretch,
 )
 from sunpy.map import Map as SunpyMap
-from astropy.wcs import WCS
 from sunpy.visualization.colormaps import cm
 
+# ── Paths ──────────────────────────────────────────────────────────────────────
+BASE = Path("D:/projects/research/CHASM/CHASM_data/sdo_imagery")
 
-BASE = Path("D:/projects/research/CHASM/download_data/aia_imagery")
+# ── SDO display settings ───────────────────────────────────────────────────────
+_WLS = [94, 131, 171, 193, 211, 304, 335, 6173]
 
-# SDO AIA normalization and colormap settings
-sdo_norms = [
-    ImageNormalize(vmin=0, vmax=445.5, stretch=AsinhStretch(0.005), clip=True),  # 94
-    ImageNormalize(vmin=0, vmax=981.3, stretch=AsinhStretch(0.005), clip=True),  # 131
-    ImageNormalize(vmin=0, vmax=6457.5, stretch=AsinhStretch(0.005), clip=True),  # 171
-    ImageNormalize(vmin=0, vmax=7757.31, stretch=AsinhStretch(0.005), clip=True),  # 193
-    ImageNormalize(vmin=0, vmax=6539.8, stretch=AsinhStretch(0.005), clip=True),  # 211
-    ImageNormalize(vmin=0, vmax=3756, stretch=AsinhStretch(0.005), clip=True),  # 304
-    ImageNormalize(vmin=0, vmax=915, stretch=AsinhStretch(0.005), clip=True),  # 335
-    ImageNormalize(vmin=-100, vmax=100, stretch=LinearStretch(), clip=True),  # mag
+_NORMS = [
+    ImageNormalize(vmin=0, vmax=445.5, stretch=AsinhStretch(0.005), clip=True),
+    ImageNormalize(vmin=0, vmax=981.3, stretch=AsinhStretch(0.005), clip=True),
+    ImageNormalize(vmin=0, vmax=6457.5, stretch=AsinhStretch(0.005), clip=True),
+    ImageNormalize(vmin=0, vmax=7757.31, stretch=AsinhStretch(0.005), clip=True),
+    ImageNormalize(vmin=0, vmax=6539.8, stretch=AsinhStretch(0.005), clip=True),
+    ImageNormalize(vmin=0, vmax=3756.0, stretch=AsinhStretch(0.005), clip=True),
+    ImageNormalize(vmin=0, vmax=915.0, stretch=AsinhStretch(0.005), clip=True),
+    ImageNormalize(vmin=-100, vmax=100, stretch=LinearStretch(), clip=True),
 ]
 
-sdo_norms_dict = {
-    k: v for k, v in zip([94, 131, 171, 193, 211, 304, 335, 6173], sdo_norms)
-}
-
-sdo_cmaps = [
+_CMAPS = [
     cm.sdoaia94,
     cm.sdoaia131,
     cm.sdoaia171,
@@ -43,171 +58,174 @@ sdo_cmaps = [
     "gray",
 ]
 
-sdo_cmaps_dict = {
-    k: v for k, v in zip([94, 131, 171, 193, 211, 304, 335, 6173], sdo_cmaps)
-}
+NORMS = dict(zip(_WLS, _NORMS))
+CMAPS = dict(zip(_WLS, _CMAPS))
 
 
-def load_fits(path: Path):
-    hdul = fits.open(path)
-    # find first HDU with data
-    for h in hdul:
-        if getattr(h, "data", None) is not None:
-            data = h.data.astype(float)
-            header = h.header
-            break
-    else:
-        hdul.close()
-        raise RuntimeError(f"No image HDU in {path}")
-    hdul.close()
-    return data, header
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 
-def print_header_snippet(name, header, keys=5):
-    print(f"{name}: shape header entries (first {keys}):")
-    cnt = 0
+def load_fits(path: Path) -> tuple[np.ndarray, fits.Header]:
+    with fits.open(path, memmap=False) as hdul:
+        hdul.verify("silentfix")
+        for hdu in hdul:
+            if getattr(hdu, "data", None) is not None:
+                return hdu.data.astype(float), hdu.header
+    raise RuntimeError(f"No image HDU found in {path}")
+
+
+def header_info(header: fits.Header) -> dict:
+    """Extract pertinent display fields from a FITS header."""
+
+    def _get(*keys, default="—"):
+        for k in keys:
+            v = header.get(k)
+            if v is not None:
+                return v
+        return default
+
+    return {
+        "DATE-OBS": _get("DATE-OBS", "DATE_OBS", "DATE__OBS"),
+        "TELESCOP": _get("TELESCOP"),
+        "INSTRUME": _get("INSTRUME"),
+        "WAVELNTH": _get("WAVELNTH"),
+        "EXPTIME": _get("EXPTIME"),
+        "RSUN_OBS": _get("RSUN_OBS", "rsun_obs"),
+        "CDELT1": _get("CDELT1", "cdelt1"),
+        "CDELT2": _get("CDELT2", "cdelt2"),
+        "CRPIX1": _get("CRPIX1", "crpix1"),
+        "CRPIX2": _get("CRPIX2", "crpix2"),
+    }
+
+
+def build_sunpy_map(data: np.ndarray, header: fits.Header) -> SunpyMap:
+    meta = {}
     for card in header.cards:
-        if cnt >= keys:
-            break
-        key = getattr(card, "keyword", None)
         try:
-            val = card.value
-            print(f"  {key}: {val}")
+            meta[card.keyword] = card.value
         except Exception:
-            # fall back to raw card string if value can't be parsed
-            print(f"  {key}: <unparsable>  raw={str(card)}")
-        cnt += 1
+            pass
+    meta.setdefault("CUNIT1", "arcsec")
+    meta.setdefault("CUNIT2", "arcsec")
+    meta.setdefault("CTYPE1", "HPLN-TAN")
+    meta.setdefault("CTYPE2", "HPLT-TAN")
+    return SunpyMap(data, meta)
 
 
-def main(date="2017-01-01", wavelength=None, vmin=None, vmax=None):
-    year = date.split("-")[0]
-    full_dir = BASE / f"{year}_FullSize"
-    if wavelength is None:
-        wls = [p.name for p in full_dir.iterdir() if p.is_dir()]
-        if not wls:
-            print("No wavelength folders found in", full_dir)
-            return
-        wavelength = wls[0]
-
-    full_path = full_dir / str(wavelength) / f"{date}.fits"
-    res_path = BASE / str(year) / str(wavelength) / f"{date}.fits"
-
-    if not full_path.exists():
-        print("Full-size not found:", full_path)
+def list_available(directory: Path) -> None:
+    year_dirs = sorted(p for p in directory.iterdir() if p.is_dir())
+    if not year_dirs:
+        print(f"  (empty: {directory})")
         return
-    if not res_path.exists():
-        print("Resampled not found:", res_path)
-        return
-
-    full, hdr_full = load_fits(full_path)
-    res, hdr_res = load_fits(res_path)
-
-    print(f"Full: {full_path} -> shape={full.shape}")
-    print_header_snippet("Full header", hdr_full)
-    print("")
-    print(f"Resampled: {res_path} -> shape={res.shape}")
-    print_header_snippet("Resampled header", hdr_res)
-
-    # Determine wavelength value from input or headers
-    wl_val = None
-    try:
-        wl_val = int(wavelength) if wavelength is not None else None
-    except Exception:
-        wl_val = None
-    if wl_val is None:
-        try:
-            wl_val = int(
-                hdr_full.get(
-                    "WAVELNTH", hdr_full.get("WAVELN", hdr_full.get("WAVE", 0))
+    for year_dir in year_dirs:
+        wl_dirs = sorted(p for p in year_dir.iterdir() if p.is_dir())
+        for wl_dir in wl_dirs:
+            dates = sorted(p.stem for p in wl_dir.glob("*.fits"))
+            if dates:
+                print(
+                    f"  {year_dir.name}/{wl_dir.name}: {len(dates)} files  "
+                    f"[{dates[0]} … {dates[-1]}]"
                 )
-            )
-        except Exception:
-            wl_val = None
 
-    # Get appropriate colormap and normalization from dictionaries
-    if wl_val in sdo_cmaps_dict:
-        cmap_full = cmap_res = sdo_cmaps_dict[wl_val]
-        norm_full = norm_res = sdo_norms_dict[wl_val]
-        print(f"Using SDO standard for wavelength {wl_val}")
+
+def first_available_date(wl: str) -> tuple[str, str] | tuple[None, None]:
+    """Return (date, year) of the first FITS file found for the given wavelength."""
+    for year_dir in sorted(p for p in BASE.iterdir() if p.is_dir()):
+        for p in sorted((year_dir / wl).glob("*.fits")):
+            return p.stem, year_dir.name
+    return None, None
+
+
+# ── Main ───────────────────────────────────────────────────────────────────────
+
+
+def main(date: str | None = None, wl1: str = "193", wl2: str = "171") -> None:
+    if not BASE.exists():
+        print(f"Base directory not found: {BASE}")
+        return
+
+    # Auto-pick date using wl1 as reference
+    if date is None:
+        date, year = first_available_date(wl1)
+        if date is None:
+            print(f"No FITS files found for wavelength {wl1} under {BASE}")
+            print("\nAvailable:")
+            list_available(BASE)
+            return
+        print(f"Auto-selected date: {date}")
     else:
-        # Fallback for unknown wavelengths
-        cmap_full = cmap_res = "gray"
-        if vmin is None:
-            vmin = 100
-        if vmax is None:
-            vmax = 5000
-        norm_full = norm_res = ImageNormalize(
-            vmin=vmin, vmax=vmax, stretch=AsinhStretch()
+        year = date.split("-")[0]
+
+    paths = {
+        wl1: BASE / year / wl1 / f"{date}.fits",
+        wl2: BASE / year / wl2 / f"{date}.fits",
+    }
+
+    missing = [(wl, p) for wl, p in paths.items() if not p.exists()]
+    if missing:
+        for wl, p in missing:
+            print(f"File not found for wavelength {wl}: {p}")
+        print("\nAvailable:")
+        list_available(BASE)
+        return
+
+    # Load both
+    panels = {}
+    for wl, path in paths.items():
+        data, hdr = load_fits(path)
+        panels[wl] = (data, hdr, header_info(hdr), path)
+
+    # ── Print summary ──────────────────────────────────────────────────────────
+    sep = "=" * 72
+    print(sep)
+    for wl, (data, hdr, info, path) in panels.items():
+        print(f"WAVELENGTH {wl} Å")
+        print(f"  Path      : {path}")
+        print(f"  Shape     : {data.shape[1]} × {data.shape[0]} px")
+        for k, v in info.items():
+            if v != "—":
+                print(f"  {k:<10}: {v}")
+        finite = data[np.isfinite(data)]
+        print(
+            f"  Data      : min={finite.min():.2f}  max={finite.max():.2f}"
+            f"  mean={finite.mean():.2f}  std={finite.std():.2f}"
         )
-        print(f"Using fallback normalization for unknown wavelength: {wl_val}")
+        print()
+    print(sep)
 
-    def cmap_name(c):
-        if isinstance(c, str):
-            return c
+    # ── Plot ───────────────────────────────────────────────────────────────────
+    fig, axes = plt.subplots(1, 2, figsize=(14, 7))
+    fig.suptitle(f"{date}", fontsize=14, fontweight="bold")
+
+    for ax, (wl, (data, hdr, info, path)) in zip(axes, panels.items()):
+        wl_int = int(wl)
+        norm = NORMS.get(wl_int) or ImageNormalize(
+            interval=PercentileInterval(99.5), stretch=AsinhStretch(0.005), clip=True
+        )
+        cmap = CMAPS.get(wl_int, "gray")
+
         try:
-            return getattr(c, "name", str(c))
+            smap = build_sunpy_map(data, hdr)
+            smap.plot_settings["cmap"] = cmap
+            smap.plot_settings["norm"] = norm
+            smap.plot(axes=ax)
         except Exception:
-            return str(c)
+            ax.imshow(data, cmap=cmap, norm=norm, origin="lower")
 
-    print(f"Using colormap: {cmap_name(cmap_full)}")
-    print(f"Using normalization: vmin={norm_full.vmin}, vmax={norm_full.vmax}")
+        ax.set_title(
+            f"{wl_int} Å   {data.shape[1]}×{data.shape[0]} px\n"
+            f"CDELT: ({info['CDELT1']}, {info['CDELT2']})   RSUN_OBS: {info['RSUN_OBS']}\n"
+            f"DATE-OBS: {info['DATE-OBS']}",
+            fontsize=9,
+            loc="left",
+        )
 
-    # Display side-by-side using SunPy Map for proper WCS projection
-    is_mag = wl_val == 6173
-    if wl_val in sdo_norms_dict:
-        # Use SunPy Map plotting for correct WCS-aware display
-        # Build SunPy maps from loaded data+header with minimal sanitization
-        def _ensure_meta(hdr):
-            # Preserve all existing metadata, only add missing coordinate units
-            # Handle unparsable cards by iterating carefully
-            new_hdr = {}
-            for card in hdr.cards:
-                try:
-                    key = card.keyword
-                    val = card.value
-                    new_hdr[key] = val
-                except Exception:
-                    # Skip unparsable cards
-                    pass
-            new_hdr.setdefault("CUNIT1", "arcsec")
-            new_hdr.setdefault("CUNIT2", "arcsec")
-            new_hdr.setdefault("CTYPE1", "HPLN-TAN")
-            new_hdr.setdefault("CTYPE2", "HPLT-TAN")
-            return new_hdr
-
-        m_full = SunpyMap(full, _ensure_meta(hdr_full))
-        m_res = SunpyMap(res, _ensure_meta(hdr_res))
-
-        m_full.plot_settings["cmap"] = cmap_full
-        m_full.plot_settings["norm"] = norm_full
-        m_res.plot_settings["cmap"] = cmap_res
-        m_res.plot_settings["norm"] = norm_res
-
-        fig = plt.figure(figsize=(12, 6))
-        ax1 = fig.add_subplot(1, 2, 1, projection=m_full.wcs)
-        m_full.plot(axes=ax1)
-        ax1.set_title(f"Full: {full.shape} - {wl_val}Å")
-
-        ax2 = fig.add_subplot(1, 2, 2, projection=m_res.wcs)
-        m_res.plot(axes=ax2)
-        ax2.set_title(f"Resampled: {res.shape} - {wl_val}Å")
-
-        plt.tight_layout()
-        plt.show()
-    else:
-        # Fallback to simple matplotlib display for unknown wavelengths
-        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
-        axes[0].imshow(full, cmap=cmap_full, origin="lower", norm=norm_full)
-        axes[0].set_title(f"Full: {full.shape}")
-        axes[1].imshow(res, cmap=cmap_res, origin="lower", norm=norm_res)
-        axes[1].set_title(f"Resampled: {res.shape}")
-        plt.tight_layout()
-        plt.show()
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":
-    date = sys.argv[1] if len(sys.argv) > 1 else "2017-01-01"
-    wl = sys.argv[2] if len(sys.argv) > 2 else None
-    vmin = float(sys.argv[3]) if len(sys.argv) > 3 else None
-    vmax = float(sys.argv[4]) if len(sys.argv) > 4 else None
-    main(date=date, wavelength=wl, vmin=vmin, vmax=vmax)
+    _date = sys.argv[1] if len(sys.argv) > 1 else None
+    _wl1 = sys.argv[2] if len(sys.argv) > 2 else "193"
+    _wl2 = sys.argv[3] if len(sys.argv) > 3 else "171"
+    main(date=_date, wl1=_wl1, wl2=_wl2)

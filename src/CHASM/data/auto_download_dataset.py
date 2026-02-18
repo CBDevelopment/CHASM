@@ -33,7 +33,7 @@ class AutoDownloadDataset(Dataset):
             [
                 p
                 for p in self.root.rglob("*")
-                if p.suffix in [".npz", ".npy", ".png", ".jpg"]
+                if p.suffix in [".npz", ".npy", ".png", ".jpg", ".fits"]
             ]
         )
         if not self.file_paths:

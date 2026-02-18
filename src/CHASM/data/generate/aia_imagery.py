@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from tqdm import tqdm
+
 # Third-party - data & astronomy
 import astropy.units as u
 import drms
@@ -19,7 +21,6 @@ from sunpy.map import Map
 import sunpy.map
 
 # Module constants
-DEFAULT_RESOLUTION = 512
 DEFAULT_PADDING_FACTOR = 0.1
 FITS_COMPRESSION_TYPE = "HCOMPRESS_1"
 FITS_QUANTIZE_LEVEL = 16.0
@@ -153,7 +154,7 @@ class JSOCQuery:
         return base
 
 
-class AIAImageDownloader:
+class SDOImageDownloader:
     """Downloader for AIA and HMI images from JSOC."""
 
     # These are the 8 wavelengths utilized by the CHRONNOS model (6173 is the LoS magnetogram)
@@ -185,12 +186,20 @@ class AIAImageDownloader:
         full_save_path: Path,
         resampled_save_path: Path,
         email: str = None,
+        verbose: bool = False,
     ):
         self.full_save_path = full_save_path
         self.resampled_save_path = resampled_save_path
         self.full_save_path.mkdir(parents=True, exist_ok=True)
         self.resampled_save_path.mkdir(parents=True, exist_ok=True)
+        self.verbose = verbose
         self.logger = logging.getLogger(self.__class__.__name__)
+        if not verbose:
+            self.logger.setLevel(logging.WARNING)
+            logging.getLogger("drms").setLevel(logging.WARNING)
+            logging.getLogger("astropy").setLevel(logging.WARNING)
+            warnings.filterwarnings("ignore", category=fits.verify.VerifyWarning)
+            warnings.filterwarnings("ignore", message=".*BLANK.*keyword.*")
         self.drms_client = drms.Client(email=email) if email else drms.Client()
         self.wavelengths = self.DEFAULT_WAVELENGTHS
         self.aia_series = JSOCQuery.AIA_SERIES
@@ -233,17 +242,10 @@ class AIAImageDownloader:
         time_diff = (parsed - query.datetime_iso).abs().dt.total_seconds() / 60
         return (time_diff <= threshold_minutes).any()
 
-    def _paths_for_time_and_wavelength(
-        self, dt: datetime, wavelength: int | None
-    ) -> tuple[Path, Path]:
-        """Return (full_path, resampled_path) for a given datetime and wavelength."""
-        year_dir = str(dt.year)
-        wl_dir = str(wavelength or 6173)  # Use 6173 for HMI magnetograms
-        filename = f"{dt.date().isoformat()}.fits"
-
-        full_dir = self.full_save_path / year_dir / wl_dir
-        resampled_dir = self.resampled_save_path / year_dir / wl_dir
-        return full_dir / filename, resampled_dir / filename
+    def _get_resampled_path_from_full(self, full_path: Path) -> Path:
+        """Get the corresponding resampled path for a full-size image path."""
+        relative_path = full_path.relative_to(self.full_save_path)
+        return self.resampled_save_path / relative_path
 
     def _fetch_query_metadata(self, query: JSOCQuery) -> dict:
         """Fetch WCS metadata from JSOC for a query."""
@@ -311,7 +313,7 @@ class AIAImageDownloader:
     def _inject_wcs_metadata(self, fits_path: Path, metadata: dict) -> None:
         """Inject WCS metadata from JSOC query into a FITS file header."""
         try:
-            with fits.open(fits_path, mode="update") as hdul:
+            with fits.open(fits_path, mode="update", output_verify="silentfix") as hdul:
                 img_hdu = _find_image_hdu(hdul)
                 if img_hdu is not None:
                     # Inject valid WCS keys into header
@@ -327,8 +329,10 @@ class AIAImageDownloader:
     def download_image_for_query(
         self, query: JSOCQuery, threshold_minutes: int = 60
     ) -> Path | None:
-        full_path, _resampled_path = self._paths_for_time_and_wavelength(
-            query.datetime_iso, query.wavelength
+        wl_dir = str(query.wavelength or 6173)
+        filename = f"{query.datetime_iso.date().isoformat()}.fits"
+        full_path = (
+            self.full_save_path / str(query.datetime_iso.year) / wl_dir / filename
         )
         # If full-size file already exists, just return it
         if full_path.exists():
@@ -357,6 +361,7 @@ class AIAImageDownloader:
         worker_func: Callable,
         max_workers: int = 4,
         progress_callback: Callable[[int, int], None] = None,
+        desc: str = "Processing",
     ) -> list:
         """Generic parallel processing with progress tracking and interrupt handling."""
         results = []
@@ -369,12 +374,16 @@ class AIAImageDownloader:
                     executor.submit(worker_func, item): item for item in items
                 }
 
-                for future in as_completed(future_to_item):
-                    result = future.result()
-                    results.append(result)
-                    completed += 1
-                    if progress_callback:
-                        progress_callback(completed, total)
+                with tqdm(
+                    total=total, desc=desc, unit="file", disable=self.verbose
+                ) as pbar:
+                    for future in as_completed(future_to_item):
+                        result = future.result()
+                        results.append(result)
+                        completed += 1
+                        pbar.update(1)
+                        if progress_callback:
+                            progress_callback(completed, total)
 
             except KeyboardInterrupt:
                 self.logger.warning("Processing interrupted by user (Ctrl+C)")
@@ -390,7 +399,7 @@ class AIAImageDownloader:
         self,
         queries: list[JSOCQuery],
         threshold_minutes: int = 60,
-        max_workers: int = 4,
+        max_workers: int = 6,
         progress_callback: Callable[[int, int], None] = None,
     ) -> list[tuple[JSOCQuery, Path | None]]:
         """Download multiple images in parallel."""
@@ -405,14 +414,20 @@ class AIAImageDownloader:
                 )
                 return (query, None)
 
-        return self._parallel_process(queries, worker, max_workers, progress_callback)
+        return self._parallel_process(
+            queries, worker, max_workers, progress_callback, desc="Downloading"
+        )
 
 
-class CHASM_AIADownloader(AIAImageDownloader):
+class CHASMSDODownloader(SDOImageDownloader):
     def __init__(
-        self, full_save_path: Path, resampled_save_path: Path, email: str = None
+        self,
+        full_save_path: Path,
+        resampled_save_path: Path,
+        email: str = None,
+        verbose: bool = False,
     ):
-        super().__init__(full_save_path, resampled_save_path, email)
+        super().__init__(full_save_path, resampled_save_path, email, verbose)
 
     def _parse_swpc_drawing_timestamp(self, drawing_filename: str) -> datetime:
         base_name = Path(drawing_filename).stem
@@ -421,12 +436,19 @@ class CHASM_AIADownloader(AIAImageDownloader):
         return timestamp
 
     def get_dates_from_swpc_drawing_dir(self, swpc_dir: Path) -> list[datetime]:
-        drawing_files = list(swpc_dir.glob("boul_neutl_fd_*.jpg"))
+        drawing_files = list(swpc_dir.rglob("boul_neutl_fd_*.jpg"))
         dates = []
         for file in drawing_files:
             dt = self._parse_swpc_drawing_timestamp(file.name)
             dates.append(dt)
         return dates
+
+    def get_jsoc_queries(
+        self,
+        dates: list[datetime],
+        wavelengths: list[int] = JSOCQuery.VALID_WAVELENGTHS,
+    ) -> list[JSOCQuery]:
+        return [self.get_jsoc_query(date, wl) for date in dates for wl in wavelengths]
 
     def _prepMap(
         self,
@@ -533,7 +555,7 @@ class CHASM_AIADownloader(AIAImageDownloader):
         self,
         full_path: Path,
         resampled_path: Path,
-        resolution: int = DEFAULT_RESOLUTION,
+        resolution: int = 512,
     ) -> Path | None:
         """Create resampled FITS from full-size FITS."""
         try:
@@ -582,12 +604,29 @@ class CHASM_AIADownloader(AIAImageDownloader):
 
     def post_process_parallel(
         self,
-        full_resampled_pairs: list[tuple[Path, Path]],
-        resolution: int = DEFAULT_RESOLUTION,
+        download_results: list[tuple[JSOCQuery, Path | None]],
+        resolution: int = 512,
         max_workers: int = 4,
         progress_callback: Callable[[int, int], None] = None,
     ) -> list[tuple[Path, Path | None]]:
-        """Post-process multiple full-size FITS files in parallel."""
+        """Post-process multiple full-size FITS files in parallel.
+
+        Args:
+            download_results: Results from download_images_parallel (query, full_path pairs)
+            resolution: Target resolution for resampled images
+            max_workers: Number of parallel workers
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            List of (full_path, resampled_path) pairs, where resampled_path is None if post-processing failed
+        """
+        # Filter out failed downloads and create full/resampled path pairs
+        path_pairs = []
+        for query, full_path in download_results:
+            if full_path is not None:
+                resampled_path = self._get_resampled_path_from_full(full_path)
+                resampled_path.parent.mkdir(parents=True, exist_ok=True)
+                path_pairs.append((full_path, resampled_path))
 
         def worker(paths: tuple[Path, Path]) -> tuple[Path, Path | None]:
             full_path, resampled_path = paths
@@ -599,14 +638,14 @@ class CHASM_AIADownloader(AIAImageDownloader):
                 return (full_path, None)
 
         return self._parallel_process(
-            full_resampled_pairs, worker, max_workers, progress_callback
+            path_pairs, worker, max_workers, progress_callback, desc="Post-processing"
         )
 
 
 if __name__ == "__main__":
     FULL_SAVE_DIR = Path("D:/projects/research/CHASM/download_data/aia_imagery_full")
     RESAMPLED_SAVE_DIR = Path("D:/projects/research/CHASM/download_data/aia_imagery")
-    downloader = CHASM_AIADownloader(
+    downloader = CHASMSDODownloader(
         full_save_path=FULL_SAVE_DIR,
         resampled_save_path=RESAMPLED_SAVE_DIR,
         email="cbeckdevelopment@gmail.com",
@@ -649,44 +688,15 @@ if __name__ == "__main__":
             f"\nDownload complete: {successful_downloads}/{len(test_queries)} successful"
         )
 
-        # Post-process any downloaded full-size FITS into resampled versions in parallel
-        print("\nPost-processing full-size images in parallel...")
-        pairs_to_process = []
-
-        for year in years:
-            full_root = FULL_SAVE_DIR / str(year)
-            if not full_root.exists():
-                continue
-            for wl_dir in full_root.iterdir():
-                if not wl_dir.is_dir():
-                    continue
-                try:
-                    wavelength = int(wl_dir.name)
-                except Exception:
-                    continue
-                for full_file in wl_dir.glob("*.fits"):
-                    # expect filename like YYYY-MM-DD.fits
-                    try:
-                        dt = datetime.fromisoformat(full_file.stem)
-                    except Exception:
-                        # skip files that don't match the date pattern
-                        continue
-                    _, resampled_path = downloader._paths_for_time_and_wavelength(
-                        dt, wavelength
-                    )
-                    if resampled_path.exists():
-                        continue
-                    resampled_path.parent.mkdir(parents=True, exist_ok=True)
-                    pairs_to_process.append((full_file, resampled_path))
-
-        if pairs_to_process:
-            print(f"Found {len(pairs_to_process)} files to post-process")
+        # Post-process downloaded images
+        if download_results:
+            print("\nPost-processing downloaded images...")
 
             def postprocess_progress(completed, total):
                 print(f"  Post-process progress: {completed}/{total}")
 
             postprocess_results = downloader.post_process_parallel(
-                pairs_to_process,
+                download_results,
                 resolution=512,
                 max_workers=6,
                 progress_callback=postprocess_progress,
@@ -697,10 +707,10 @@ if __name__ == "__main__":
                 1 for _, path in postprocess_results if path is not None
             )
             print(
-                f"\nPost-processing complete: {successful_postprocess}/{len(pairs_to_process)} successful"
+                f"\nPost-processing complete: {successful_postprocess}/{len(download_results)} successful"
             )
         else:
-            print("No files need post-processing")
+            print("No files to post-process")
 
     except KeyboardInterrupt:
         print("\n\nProcess interrupted by user. Exiting gracefully...")
