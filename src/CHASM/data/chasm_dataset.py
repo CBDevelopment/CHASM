@@ -1,17 +1,19 @@
 from pathlib import Path
-from torch.utils.data import Dataset
 import numpy as np
 from tqdm import tqdm
 import json
-from .auto_download_dataset import AutoDownloadDataset
-from .folder_utils import extract_date
+
+try:
+    from .auto_download_dataset import AutoDownloadDataset
+except ImportError:
+    from auto_download_dataset import AutoDownloadDataset
 
 
+# TODO: Also return AIA imagery in the datasets
 class CHASMDataset(AutoDownloadDataset):
-    def __init__(self, root="download_data/chasm", fetch_online=False):
+    def __init__(self, root: str, fetch_online=False):
         self.root = root
         self.mode = "all"
-        self.all_file_paths = []
         if fetch_online:
             file_id = "17XR3TII5onfWo67E3uyBjpYXPYzB-Tna"
             url = f"https://drive.google.com/uc?id={file_id}"
@@ -23,43 +25,8 @@ class CHASMDataset(AutoDownloadDataset):
         else:
             super().__init__(root=root)
 
-    def get_mode(self):
-        return self.mode
-
-    def set_mode_all(self):
-        self.mode = "all"
-        self.file_paths = self.all_file_paths
-
-    def set_mode_train(self):
-        self.mode = "train"
-        self.file_paths = [
-            item
-            for item in self.all_file_paths
-            if extract_date(str(item)).split("-")[1] not in ["11", "12"]
-        ]
-
-    def set_mode_test(self):
-        self.mode = "test"
-        self.file_paths = [
-            item
-            for item in self.all_file_paths
-            if extract_date(str(item)).split("-")[1] in ["11", "12"]
-        ]
-
     def filenames(self) -> list[str]:
         return sorted((str(p) for p in Path(self.root).rglob("*") if p.is_file()))
-
-    def get_aia_days(self):
-        j = json.load(open(Path(self.root) / "missing_wavelength_dates.json"))[
-            "MISSING_WAVELENGTHS"
-        ]
-        return j
-
-    def get_pre_timeshift_days(self):
-        j = json.load(open(Path(self.root) / "missing_wavelength_dates.json"))[
-            "PRE_TIMESHIFT"
-        ]
-        return j
 
     def __len__(self):
         return len(self.file_paths)
@@ -71,157 +38,129 @@ class CHASMDataset(AutoDownloadDataset):
         return data
 
 
-class CHASM1407(CHASMDataset, Dataset):
-    # TODO figure out where the extra ~30 days are coming from
-    def __init__(
-        self, root="download_data/chasm_as_npz", fetch_online=True, needs_aia=True
-    ):
+class CHASM1407(CHASMDataset):
+    def __init__(self, root: str, sdo_imagery_dir: str, fetch_online=False):
         super().__init__(root, fetch_online)
         self.root = root
-        self.needs_aia = needs_aia
-        # TODO get aia days properly from an aia path
-        if needs_aia:
-            self.aia_days = (
-                self.get_aia_days()
-            )  # TODO fix this is broken right now! (have it link to actual AIA folder)
-        else:
-            self.aia_days = []
-        self.prune_to_1407()
-
-    def prune_to_1407(self):
-        new_file_paths = []
-        for idx, file_path in tqdm(
-            enumerate(self.file_paths),
-            total=len(self.file_paths),  # so tqdm knows the max
-            desc="Pruning to 1407",
-        ):
-            # TODO could make this less brittle by using dictionary instead of directly from file name?
-            filename = Path(file_path).stem
-            date_str = extract_date(filename)  # '2017-05-10'
-
-            data = np.load(file_path, allow_pickle=True)
-            # Drop paths that are "bad" (incorrect # of CHs or flagged)
-
-            if (date_str not in self.aia_days) or not self.needs_aia:
-                new_file_paths.append(self.file_paths[idx])
-
-        self.all_file_paths = new_file_paths  # TODO figure out why not down to 1111
-        self.file_paths = self.all_file_paths
+        self.sdo_imagery_dir = sdo_imagery_dir
+        self.fetch_online = fetch_online
+        self.files = super().filenames()
+        self.json_file = [f for f in self.files if "missing_wavelength_dates" in f][0]
+        self.files_1407 = self.prune_to_1407()
 
     def filenames(self):
-        return self.file_paths
+        return self.files_1407
 
-    # def __len__(self):
-    #     return len(self.file_paths)
+    def prune_to_1407(self) -> list[Path]:
+        missing_wavelength_dates = json.load(open(self.json_file, "r"))[
+            "MISSING_WAVELENGTHS"
+        ]
+        missing_wavelength_dates = [
+            d.replace("-", "") for d in missing_wavelength_dates
+        ]
+        print("Missing Wavelength Dates: ", len(missing_wavelength_dates))
 
-    # def __getitem__(self, idx):
-    #     file_path = self.file_paths[idx]
+        remaining_files = [
+            Path(f) for f in self.files if "missing_wavelength_dates" not in f
+        ]
+        # 2022-03-23 synoptic map could not be segmented, not included in CHASM Selections
+        # 2022-08-16 synoptic map was rotated 90 degrees, not included in CHASM Selections
 
-    #     data = np.load(file_path, allow_pickle=True)
-    #     sample = data[list(data.keys())[0]]
+        not_present_193A_dates = {"20171108", "20220720"}
+        # These two dates are missing 193A images so they could not be used to create properly scaled CHASM masks
 
-    #     return sample
+        remaining_dates = (
+            set([f.stem.split("_")[-2] for f in remaining_files])
+            - not_present_193A_dates
+            - set(missing_wavelength_dates)
+        )
+        print("CHASM Selections: ", len(remaining_dates))
+
+        return [f for f in remaining_files if f.stem.split("_")[-2] in remaining_dates]
+
+    def __len__(self):
+        return len(self.files_1407)
+
+    def __getitem__(self, idx):
+        file_path = self.files_1407[idx]
+
+        data = np.load(file_path, allow_pickle=True)
+        return data
 
 
-class CHASM1111(CHASMDataset, Dataset):
-    def __init__(
-        self, root="download_data/chasm_as_npz", fetch_online=True, needs_aia=True
-    ):
+class CHASM1111(CHASM1407):
+    def __init__(self, root: str, sdo_imagery_dir: str, fetch_online=False):
         super().__init__(root, fetch_online)
         self.root = root
-        self.needs_aia = needs_aia
-        if needs_aia:
-            self.aia_days = (
-                self.get_aia_days()
-            )  # TODO fix this is broken right now! (have it link to actual AIA folder)
-        else:
-            self.aia_days = None
-        self.prune_to_1111()
+        self.sdo_imagery_dir = sdo_imagery_dir
+        self.fetch_online = fetch_online
+        self.files_1111 = self.prune_to_1111()
 
-    def prune_to_1111(self):
+    def filenames(self):
+        return self.files_1111
+
+    def prune_to_1111(self) -> list[Path]:
         new_file_paths = []
         for idx, file_path in tqdm(
-            enumerate(self.file_paths),
-            total=len(self.file_paths),  # so tqdm knows the max
+            enumerate(self.files_1407),
+            total=len(self.files_1407),  # so tqdm knows the max
             desc="Pruning to 1111",
         ):
-            # TODO could make this less brittle by using dictionary instead of directly from file name?
-            filename = Path(file_path).stem
-            date_str = extract_date(filename)  # '2017-05-10'
-
-            # file_path_date =
             data = np.load(file_path, allow_pickle=True)
+            if data["All Detected"] and np.all(data["Quality"] == "Good"):
+                new_file_paths.append(self.files_1407[idx])
 
-            # TODO need to fix the CHASM download from Google Drive otherwise this won't work (needs key "quality")
-            # Drop paths that are "bad" (incorrect # of CHs or flagged)
-
-            if "Quality" in data.keys():
-                if data["All Detected"] and data["Quality"] == "Good":
-                    if self.needs_aia:
-                        if date_str in self.aia_days:
-                            new_file_paths.append(self.file_paths[idx])
-                    else:
-                        new_file_paths.append(self.file_paths[idx])
-
-            # new_file_paths.append(self.file_paths[idx])
-
-        # self.all_file_paths = new_file_paths # TODO figure out why not down to 1111
-        self.file_paths = new_file_paths
-
-    def filenames(self):
-        return self.file_paths
-
-    # def __len__(self):
-    #     return len(self.file_paths)
-
-    # def __getitem__(self, idx):
-    #     file_path = self.file_paths[idx]
-
-    #     data = np.load(file_path, allow_pickle=True)
-    #     return data
+        print("CHASM-1111 Selections: ", len(new_file_paths))
+        return new_file_paths
 
 
-# TODO add CHASM 960 (somehow get the AIA times, maybe manually through that list?)
-
-
-class CHASM960(CHASMDataset, Dataset):
-    def __init__(self, fetch_online=True, root="download_data/chasm_as_npz"):
+class CHASM970(CHASM1111):
+    def __init__(self, root: str, sdo_imagery_dir: str, fetch_online=False):
         super().__init__(root, fetch_online)
         self.root = root
-        self.aia_days = self.get_aia_days()
-        self.pre_timeshift_days = self.get_pre_timeshift_days()
-        self.prune_to_960()
+        self.sdo_imagery_dir = sdo_imagery_dir
+        self.fetch_online = fetch_online
+        self.files_970 = self.prune_to_970()
 
     def filenames(self):
-        return self.file_paths
+        return self.files_970
 
-    def prune_to_960(self):
+    def prune_to_970(self) -> list[Path]:
+        timeshifted_dates = json.load(open(self.json_file, "r"))["PRE_TIMESHIFT_DATES"]
+        timeshifted_dates = [d.replace("-", "") for d in timeshifted_dates]
+
         new_file_paths = []
         for idx, file_path in tqdm(
-            enumerate(self.file_paths),
-            total=len(self.file_paths),  # so tqdm knows the max
-            desc="Pruning to 967",
+            enumerate(self.files_1111),
+            total=len(self.files_1111),  # so tqdm knows the max
+            desc="Pruning to 970",
         ):
-            # TODO could make this less brittle by using dictionary instead of directly from file name?
-            filename = Path(file_path).stem
-            date_str = filename.split("T")[0]  # '2017-05-10'
+            if file_path.stem.split("_")[-2] not in timeshifted_dates:
+                new_file_paths.append(self.files_1111[idx])
 
-            # file_path_date =
-            data = np.load(file_path, allow_pickle=True)
-            # Drop paths that are "bad" (incorrect # of CHs or flagged)
+        print("CHASM-970 Selections: ", len(new_file_paths))
+        return new_file_paths
 
-            if data["All Detected"] and np.all(data["Quality"] == "Good"):
-                if date_str not in self.pre_timeshift_days:
-                    new_file_paths.append(self.file_paths[idx])
 
-        self.all_file_paths = new_file_paths  # TODO figure out why not down to 1111
-        self.file_paths = self.all_file_paths
+if __name__ == "__main__":
+    BASE_DIR = Path("../../../CHASM_data")
+    CHASM_SELECTIONS_DIR = BASE_DIR / "chasm_selections"
 
-    # def __len__(self):
-    #     return len(self.file_paths)
+    chasm_selections = CHASMDataset(root=CHASM_SELECTIONS_DIR, fetch_online=False)
+    print(len(chasm_selections.filenames()))
 
-    # def __getitem__(self, idx):
-    #     file_path = self.file_paths[idx]
+    print("CHASM 1407")
+    chasm_1407 = CHASM1407(
+        root=CHASM_SELECTIONS_DIR,
+        sdo_imagery_dir=BASE_DIR / "sdo_imagery" / "full_size_images",
+    )
 
-    #     data = np.load(file_path, allow_pickle=True)
-    #     return data
+    chasm_1111 = CHASM1111(
+        root=CHASM_SELECTIONS_DIR,
+        sdo_imagery_dir=BASE_DIR / "sdo_imagery" / "full_size_images",
+    )
+
+    chasm_970 = CHASM970(
+        root=CHASM_SELECTIONS_DIR,
+        sdo_imagery_dir=BASE_DIR / "sdo_imagery" / "full_size_images",
+    )
