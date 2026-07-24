@@ -15,20 +15,20 @@ from chronnos.evaluate.detect import (
 )
 import torch
 
-from chasm.datasets.google_drive.drawings_dataset import DrawingsDataset
-from chasm.datasets.google_drive.aia_dataset import AIADataset
-from chasm.datasets.google_drive.chasm_dataset import (
+from chasm.data.drawings_dataset import DrawingsDataset
+from chasm.data.sdo_dataset import SDODataset
+from chasm.data.chasm_dataset import (
     CHASMDataset,
     CHASM960,
     CHASM1111,
     CHASM1407,
 )
-from chasm.datasets.fits_dataset import FITSDataset
-from chasm.datasets.chronnos_dataset import (
+from chasm.data.fits_dataset import FITSDataset
+from chasm.data.chronnos_dataset import (
     CHRONNOSDataset,
     InferenceChronnosConfig,
 )
-from chasm.datasets.prediction_dataset import PredictionDataset
+from chasm.data.prediction_dataset import PredictionDataset
 
 
 # TODO document this
@@ -68,8 +68,8 @@ def build_prediction_dataset(
 
     aia_ds = (
         aia
-        if isinstance(aia, AIADataset)
-        else AIADataset(root=aia, fetch_online=fetch_online)
+        if isinstance(aia, SDODataset)
+        else SDODataset(root=aia, fetch_online=fetch_online)
         if aia
         else None
     )

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
-from chasm.datasets.folder_utils import *
+from chasm.data.folder_utils import *
 import matplotlib.pyplot as plt
 
 

@@ -1,10 +1,10 @@
 from pathlib import Path
 import numpy as np
-from chasm.datasets.google_drive.aia_dataset import AIADataset
+from chasm.data.sdo_dataset import SDODataset
 
 if __name__ == "__main__":
     path = r"/home/egsmith/scratch/CoronalHoles/src/polished_pipeline/PREDICTIONS/CHASM1111/aia"
-    aia = AIADataset(
+    aia = SDODataset(
         path,
     )
     years = aia.get_years()

@@ -7,7 +7,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 from chronnos.train.model import Trainer
-from chasm.datasets.folder_utils import *
+from chasm.data.folder_utils import *
 from chronnos.data.convert import (
     get_intersecting_files,
     convertMaps,
@@ -17,15 +17,15 @@ from chronnos.data.convert import (
     _MapConverter,
 )
 
-from chasm.datasets.google_drive.aia_dataset import AIADataset
-from chasm.datasets.google_drive.chasm_dataset import (
+from chasm.data.sdo_dataset import SDODataset
+from chasm.data.chasm_dataset import (
     CHASMDataset,
     CHASM1407,
     CHASM1111,
     CHASM960,
 )
-from chasm.datasets.fits_dataset import FITSDataset
-from chasm.datasets.chronnos_dataset import CHRONNOSDataset, DefaultChronnosConfig
+from chasm.data.fits_dataset import FITSDataset
+from chasm.data.chronnos_dataset import CHRONNOSDataset, DefaultChronnosConfig
 
 
 # modified from CHRONNOS get_intersecting_files in convert.py
@@ -124,7 +124,7 @@ def main():
         root=r"D:\CHASM_TABLES\PREDICTION_PIPELINE_TEST_2\chronnos_training",
         config=DefaultChronnosConfig(),
     )
-    aia_ds = AIADataset(
+    aia_ds = SDODataset(
         r"D:\CHASM_TABLES\PREDICTION_PIPELINE_TEST_2\aia", fetch_online=False
     )
     fits_ds = FITSDataset(root=r"D:\CHASM_TABLES\PREDICTION_PIPELINE_TEST_2\fits")
